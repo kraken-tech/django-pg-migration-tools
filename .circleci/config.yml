@@ -1,0 +1,87 @@
+version: 2.1
+
+jobs:
+  lint:
+    docker:
+      # When upgrading the Docker image, make sure the cache key is updated too.
+      - image: cimg/python:3.11.9
+    resource_class: small
+    steps:
+      - checkout
+      # Installing packages into a virtualenv is useful as it provides an easier target to cache.
+      # Note that this step needs including in all jobs that install Python packages.
+      - run:
+          name: Create virtualenv
+          command: |
+            python -m venv /home/circleci/venv/
+            echo "source /home/circleci/venv/bin/activate" >> $BASH_ENV
+      - restore_cache:
+          keys:
+            - &cache-key python-3.11.9-packages-v1-{{ checksum "requirements/development.txt" }}
+            - &cache-key-prefix python-3.11.9-packages-v1-
+      - run:
+          name: Install dependencies
+          command: make dev
+      - run:
+          name: Install pre-commit
+          command: pip install pre-commit
+      - save_cache:
+          key: *cache-key
+          paths:
+            - "~/venv/"
+            - "~/.cache/pip"
+      - run:
+          name: Run ruff formatter
+          command: make ruff_format
+          when: always
+      - run:
+          name: Run ruff linter
+          command: make ruff_lint
+          when: always
+      - run:
+          name: Run Mypy
+          command: make mypy
+          when: always
+      - store_test_results:
+          path: test-results
+
+  test:
+    docker:
+      # When upgrading the Docker image, make sure the cache key is updated too.
+      - image: cimg/python:3.11.4
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install additional Python versions and Nox
+          command: |
+            # Install additional Python versions that Nox needs. Note the
+            # `cimg/python:3.11` image already has Python 3.10 installed.
+            pyenv install 3.12.3
+            pyenv local 3.12.3
+            pip install nox
+          when: always
+      - run:
+          name: Run tests
+          # To start with, it's cost-effective to run all matrix tests in one
+          # CI job. But as the test suite grows, it will make more sense to
+          # split the matrix sessions across multiple CI jobs. This can be done
+          # using CircleCI's matrix jobs functionality to pass in the Nox session name to run.
+          command: make matrix_test
+          when: always
+      - run:
+          name: Run pre-commit hooks
+          environment:
+            # Don't run pre-commit checks which have a dedicated CI step.
+            # Also, don't complain about commits on the main branch in CI.
+            SKIP: ruff-lint,ruff-format,no-commit-to-branch
+          command: pre-commit run --all-files
+          when: always
+      - store_test_results:
+          path: test-results
+
+workflows:
+  test-build:
+    jobs:
+      - lint
+      - test

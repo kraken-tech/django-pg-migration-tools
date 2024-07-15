@@ -1,0 +1,113 @@
+# Packaging
+# ---------
+
+[build-system]
+requires = ["setuptools>=67.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# This is the default but we include it to be explicit.
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# Include the root-package `py.typed` file so Mypy uses inline type annotations.
+"django_pg_migration_tools" = ["django_pg_migration_tools/py.typed"]
+
+# Project
+# -------
+
+[project]
+name = "django_pg_migration_tools"
+version = "0.1-dev"
+dependencies = []
+
+[project.urls]
+# See https://daniel.feldroy.com/posts/2023-08-pypi-project-urls-cheatsheet for
+# additional URLs that can be included here.
+repository = "https://github.com/octoenergy/django-pg-migration-tools"
+changelog = "https://github.com/octoenergy/django-pg-migration-tools/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest",
+    "nox",  # Install in virtualenv so Mypy has access to the package types. 
+
+    # Linting
+    "ruff",
+    "mypy",
+
+    # Packaging
+    "build",
+]
+
+# Ruff
+# ----
+
+[tool.ruff]
+line-length = 99
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # pyflakes
+    "F",
+    # isort
+    "I",
+]
+ignore = [
+    # Ruff's formatter will try to respect the `line-length` setting
+    # but doesn't guarantee it - so we ignore the possible line length
+    # errors that the checker might raise.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Allow unused imports in `__init__.py` files as these are convenience imports.
+"**/__init__.py" = [ "F401" ]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "project",
+    "local-folder",
+]
+
+[tool.ruff.lint.isort.sections]
+"project" = [
+    "django_pg_migration_tools",
+    "tests",
+]
+
+# Mypy
+# ----
+
+[tool.mypy]
+files = "."
+exclude = "build/"
+
+# Use strict defaults
+strict = true
+warn_unreachable = true
+warn_no_return = true
+
+[[tool.mypy.overrides]]
+# Don't require test functions to include types
+module = "tests.*"
+allow_untyped_defs = true
+disable_error_code = "attr-defined"
+
+# Pytest
+# ------
+
+[tool.pytest.ini_options]
+# Ensure error warnings are converted into test errors.
+filterwarnings = "error"
