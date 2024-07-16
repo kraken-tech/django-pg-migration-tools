@@ -4,7 +4,6 @@ versions of Django (used as an example).
 """
 
 import contextlib
-import os
 import tempfile
 from typing import IO, Generator
 
@@ -72,9 +71,4 @@ def tests(session: nox.Session, package_constraint: str) -> None:
         # Install the dependencies from the newly compiled lockfile and main package.
         session.install("-r", lock_file.name, ".")
 
-    # When run in CircleCI, create JUnit XML test results.
-    commands = ["pytest"]
-    if "CIRCLECI" in os.environ:
-        commands.append(f"--junitxml=test-results/junit.{session.name}.xml")
-
-    session.run(*commands, *session.posargs)
+    session.run("pytest", *session.posargs)
