@@ -1,11 +1,6 @@
 PIP_VERSION=24.0
 SHELL=/bin/bash
 
-# If we're running in CI then store Pytest output in a format which CircleCI can parse
-ifdef CIRCLECI
-MYPY_ARGS=--junit-xml=test-results/mypy.xml
-endif
-
 # Standard entry points
 # =====================
 
