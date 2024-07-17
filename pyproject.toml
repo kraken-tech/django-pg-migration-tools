@@ -31,10 +31,22 @@ repository = "https://github.com/octoenergy/django-pg-migration-tools"
 changelog = "https://github.com/octoenergy/django-pg-migration-tools/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+# Used for running the test matrix via `nox` locally or by remote checks.
+# Also reused in the `dev` dependencies list.
+pytest-in-nox = [
+    "dj-database-url>=2.1.0",
+    "django-stubs>=5.0.0",
+    "environs>=11.0.0",
+    "psycopg2-binary>=2.9.9",
+    "psycopg[binary]>=3.1.18",
+    "pytest-django>=4.8.0",
+    "pytest>=8.2.0",
+]
 dev = [
     # Testing
-    "pytest",
-    "nox",  # Install in virtualenv so Mypy has access to the package types. 
+    "django_pg_migration_tools[pytest-in-nox]",
+    "django>=4.2.0",  # Django is needed for `make test`, but not for `nox`.
+    "nox",  # Install in virtualenv so Mypy has access to the package types.
 
     # Linting
     "ruff",
@@ -48,10 +60,7 @@ dev = [
 # ----
 
 [tool.ruff]
-line-length = 99
-
-[tool.ruff.lint]
-select = [
+lint.select = [
     # pycodestyle
     "E",
     # pyflakes
@@ -59,7 +68,7 @@ select = [
     # isort
     "I",
 ]
-ignore = [
+lint.ignore = [
     # Ruff's formatter will try to respect the `line-length` setting
     # but doesn't guarantee it - so we ignore the possible line length
     # errors that the checker might raise.
@@ -111,3 +120,6 @@ disable_error_code = "attr-defined"
 [tool.pytest.ini_options]
 # Ensure error warnings are converted into test errors.
 filterwarnings = "error"
+# Ensure that tests fail if an xfail test unexpectedly passes.
+xfail_strict = true
+DJANGO_SETTINGS_MODULE = "tests.example_app.settings"

@@ -4,6 +4,7 @@ versions of Django (used as an example).
 """
 
 import contextlib
+import os
 import tempfile
 from typing import IO, Generator
 
@@ -16,7 +17,9 @@ nox.options.default_venv_backend = "uv"
 
 @contextlib.contextmanager
 def temp_constraints_file() -> Generator[IO[str], None, None]:
-    with tempfile.NamedTemporaryFile(mode="w", prefix="constraints.", suffix=".txt") as f:
+    with tempfile.NamedTemporaryFile(
+        mode="w", prefix="constraints.", suffix=".txt"
+    ) as f:
         yield f
 
 
@@ -51,8 +54,9 @@ def tests(session: nox.Session, package_constraint: str) -> None:
         # It's easy to add more constraints here if needed.
         constraints_file.write(f"{package_constraint}\n")
 
-        # Compile a new development lock file with the additional package constraints from this
-        # session. Use a unique lock file name to avoid session pollution.
+        # Compile a new development lock file with the additional package
+        # constraints from this session. Use a unique lock file name to avoid
+        # session pollution.
         session.run(
             "uv",
             "pip",
@@ -60,7 +64,7 @@ def tests(session: nox.Session, package_constraint: str) -> None:
             "--quiet",
             "--resolver=backtracking",
             "--strip-extras",
-            "--extra=dev",
+            "--extra=pytest-in-nox",
             "pyproject.toml",
             "--constraint",
             constraints_file.name,
@@ -68,7 +72,13 @@ def tests(session: nox.Session, package_constraint: str) -> None:
             lock_file.name,
         )
 
-        # Install the dependencies from the newly compiled lockfile and main package.
+        # Install the dependencies from the newly compiled lockfile and main
+        # package.
         session.install("-r", lock_file.name, ".")
+
+    # Add the project directory to the PYTHONPATH for running the test Django
+    # project.
+    project_dir = os.path.abspath(".")
+    session.env["PYTHONPATH"] = project_dir
 
     session.run("pytest", *session.posargs)
