@@ -17,7 +17,9 @@ nox.options.default_venv_backend = "uv"
 
 @contextlib.contextmanager
 def temp_constraints_file() -> Generator[IO[str], None, None]:
-    with tempfile.NamedTemporaryFile(mode="w", prefix="constraints.", suffix=".txt") as f:
+    with tempfile.NamedTemporaryFile(
+        mode="w", prefix="constraints.", suffix=".txt"
+    ) as f:
         yield f
 
 

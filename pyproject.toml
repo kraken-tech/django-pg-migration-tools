@@ -60,10 +60,7 @@ dev = [
 # ----
 
 [tool.ruff]
-line-length = 99
-
-[tool.ruff.lint]
-select = [
+lint.select = [
     # pycodestyle
     "E",
     # pyflakes
@@ -71,7 +68,7 @@ select = [
     # isort
     "I",
 ]
-ignore = [
+lint.ignore = [
     # Ruff's formatter will try to respect the `line-length` setting
     # but doesn't guarantee it - so we ignore the possible line length
     # errors that the checker might raise.
