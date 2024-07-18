@@ -22,6 +22,7 @@ where = ["src"]
 [project]
 name = "django_pg_migration_tools"
 version = "0.1-dev"
+description = "Tools for making Django migrations safer and more scalable."
 dependencies = []
 
 [project.urls]
