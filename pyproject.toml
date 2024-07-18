@@ -22,13 +22,29 @@ where = ["src"]
 [project]
 name = "django_pg_migration_tools"
 version = "0.1-dev"
+description = "Tools for making Django migrations safer and more scalable."
+license.file = "LICENSE"
+readme = "README.md"
+requires-python = ">=3.10"
 dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: BSD License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
 
 [project.urls]
 # See https://daniel.feldroy.com/posts/2023-08-pypi-project-urls-cheatsheet for
 # additional URLs that can be included here.
-repository = "https://github.com/octoenergy/django-pg-migration-tools"
-changelog = "https://github.com/octoenergy/django-pg-migration-tools/blob/main/CHANGELOG.md"
+repository = "https://github.com/kraken-tech/django-pg-migration-tools"
+changelog = "https://github.com/kraken-tech/django-pg-migration-tools/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # Used for running the test matrix via `nox` locally or by remote checks.
