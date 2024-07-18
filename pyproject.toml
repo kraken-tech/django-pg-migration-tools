@@ -41,8 +41,8 @@ classifiers = [
 [project.urls]
 # See https://daniel.feldroy.com/posts/2023-08-pypi-project-urls-cheatsheet for
 # additional URLs that can be included here.
-repository = "https://github.com/octoenergy/django-pg-migration-tools"
-changelog = "https://github.com/octoenergy/django-pg-migration-tools/blob/main/CHANGELOG.md"
+repository = "https://github.com/kraken-tech/django-pg-migration-tools"
+changelog = "https://github.com/kraken-tech/django-pg-migration-tools/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # Used for running the test matrix via `nox` locally or by remote checks.
