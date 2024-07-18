@@ -23,7 +23,11 @@ where = ["src"]
 name = "django_pg_migration_tools"
 version = "0.1-dev"
 description = "Tools for making Django migrations safer and more scalable."
+license.file = "LICENSE"
 dependencies = []
+classifiers = [
+  "License :: OSI Approved :: BSD License",
+]
 
 [project.urls]
 # See https://daniel.feldroy.com/posts/2023-08-pypi-project-urls-cheatsheet for
