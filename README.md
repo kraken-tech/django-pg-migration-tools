@@ -171,8 +171,9 @@ make update
 ```
 
 This will update the pinned versions of every package in the
-`requirements/development.txt` lock file to the latest version which is
-compatible with the constraints in `pyproject.toml`.
+`requirements/development.txt` and `requirements/pytest-in-nox` (required for
+CI) lock files to the latest version which is compatible with the constraints
+in `pyproject.toml`.
 
 You can then run:
 
