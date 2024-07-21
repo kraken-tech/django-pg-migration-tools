@@ -1,0 +1,67 @@
+name: Python tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+
+    strategy:
+      matrix:
+        postgres-image:
+          - "postgres:12"
+          - "postgres:13"
+          - "postgres:14"
+          - "postgres:15"
+          - "postgres:16"
+
+    services:
+      postgres:
+        image: ${{ matrix.postgres-image }}
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python versions
+        uses: actions/setup-python@v5
+        with:
+          python-version: |
+            3.12
+            3.11
+            3.10
+          cache: 'pip'
+          cache-dependency-path: |
+            pyproject.toml
+            requirements/*.txt
+            noxfile.py
+
+      - name: Make a virtualenv
+        run: python3 -m venv .venv
+
+      - name: Install requirements
+        run: |
+          source .venv/bin/activate
+          pip install uv==0.1.40
+          uv pip install --requirement requirements/pytest-in-nox.txt
+
+      - name: Run the tests
+        run: |
+          source .venv/bin/activate
+          nox
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost/django_integrity
