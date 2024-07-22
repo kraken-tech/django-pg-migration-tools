@@ -53,6 +53,7 @@ pytest-in-nox = [
     "dj-database-url>=2.1.0",
     "django-stubs>=5.0.0",
     "environs>=11.0.0",
+    "nox>=2024.4.15",
     "psycopg2-binary>=2.9.9",
     "psycopg[binary]>=3.1.18",
     "pytest-django>=4.8.0",
@@ -62,14 +63,14 @@ dev = [
     # Testing
     "django_pg_migration_tools[pytest-in-nox]",
     "django>=4.2.0",  # Django is needed for `make test`, but not for `nox`.
-    "nox",  # Install in virtualenv so Mypy has access to the package types.
 
     # Linting
-    "ruff",
-    "mypy",
+    "ruff>=0.5.2",
+    "mypy>=1.10.1",
+    "pre-commit>=3.7.1",
 
     # Packaging
-    "build",
+    "build>=1.2.1",
 ]
 
 # Ruff

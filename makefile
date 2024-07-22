@@ -38,6 +38,8 @@ format:
 .PHONY:update
 update:
 	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=dev --output-file=requirements/development.txt
+	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=pytest-in-nox --output-file=requirements/pytest-in-nox.txt
+
 
 .PHONY:package
 package:
