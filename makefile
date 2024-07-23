@@ -39,7 +39,15 @@ format:
 update:
 	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=dev --output-file=requirements/development.txt
 	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=pytest-in-nox --output-file=requirements/pytest-in-nox.txt
+	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=docs --output-file=requirements/docs.txt
 
+.PHONY:docs
+docs:
+	sphinx-build docs/ build/docs -T -b html --fail-on-warning
+
+.PHONY:clean
+clean:
+	rm -rf build
 
 .PHONY:package
 package:

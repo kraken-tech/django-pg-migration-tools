@@ -59,9 +59,15 @@ pytest-in-nox = [
     "pytest-django>=4.8.0",
     "pytest>=8.2.0",
 ]
+docs = [
+  "sphinx>=7.4.7",
+  "sphinx_rtd_theme>=2.0.0",
+  "sphinx_lint>=0.9.1",
+]
 dev = [
     # Testing
     "django_pg_migration_tools[pytest-in-nox]",
+    "django_pg_migration_tools[docs]",
     "django>=4.2.0",  # Django is needed for `make test`, but not for `nox`.
 
     # Linting
