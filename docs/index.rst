@@ -7,3 +7,5 @@ migrations safer and more scalable.
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   usage/timeouts
