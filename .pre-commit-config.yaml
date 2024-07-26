@@ -37,3 +37,11 @@ repos:
         language: system
         types: [python]
         require_serial: true
+
+      - id: sphinx-lint
+        name: "lint the sphinx rst files in the docs folder"
+        entry: "sphinx-lint --sort-by filename"
+        language: python
+        types: [rst]
+        files: ^docs/
+        require_serial: true
