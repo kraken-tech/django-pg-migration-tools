@@ -9,7 +9,7 @@ dev: install_python_packages .git/hooks/pre-commit
 
 .PHONY:test
 test:
-	python -m pytest
+	python -m pytest $(PYTEST_FLAGS)
 
 .PHONY:matrix_test
 matrix_test:
