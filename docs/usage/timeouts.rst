@@ -23,6 +23,7 @@ values.
 
 Function Definitions
 --------------------
+.. _apply_timeouts:
 
 .. py:function:: timeouts.apply_timeouts(using: str, lock_timeout: datetime.timedelta | None = None, statement_timeout: datetime.timedelta | None = None, close_transaction_leak: bool = False) -> Iterator[None]:
 
