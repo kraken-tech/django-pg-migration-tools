@@ -45,3 +45,10 @@ repos:
         types: [rst]
         files: ^docs/
         require_serial: true
+
+      - id: mypy
+        name: "run mypy for type checking"
+        entry: "mypy"
+        language: system
+        types: [python]
+        require_serial: true
