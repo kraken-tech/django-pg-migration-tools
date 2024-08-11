@@ -14,7 +14,6 @@ jobs:
     strategy:
       matrix:
         postgres-image:
-          - "postgres:12"
           - "postgres:13"
           - "postgres:14"
           - "postgres:15"

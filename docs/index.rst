@@ -9,4 +9,5 @@ migrations safer and more scalable.
    :caption: Contents:
 
    usage/timeouts
+   usage/operations
    usage/management_commands
