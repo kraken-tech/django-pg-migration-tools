@@ -32,21 +32,24 @@ class Command(DjangoMigrationMC):
 
     @base.no_translations
     def handle(self, *args: Any, **options: Any) -> None:
-        statement_timeout: None | int = options["statement_timeout_in_ms"]
-        lock_timeout: None | int = options["lock_timeout_in_ms"]
+        statement_timeout_in_ms: int | None = options["statement_timeout_in_ms"]
+        lock_timeout_in_ms: int | None = options["lock_timeout_in_ms"]
 
-        if statement_timeout is None and lock_timeout is None:
+        if statement_timeout_in_ms is None and lock_timeout_in_ms is None:
             raise ValueError(
                 "At least one of --lock-timeout-in-ms or --statement-timeout-in-ms "
                 "must be specified."
             )
 
-        if statement_timeout is not None:
+        statement_timeout: datetime.timedelta | None = None
+        if statement_timeout_in_ms is not None:
             statement_timeout = datetime.timedelta(
-                seconds=int(statement_timeout / 1_000)
+                seconds=int(statement_timeout_in_ms / 1_000)
             )
-        if lock_timeout is not None:
-            lock_timeout = datetime.timedelta(seconds=int(lock_timeout / 1_000))
+
+        lock_timeout: datetime.timedelta | None = None
+        if lock_timeout_in_ms is not None:
+            lock_timeout = datetime.timedelta(seconds=int(lock_timeout_in_ms / 1_000))
 
         with timeouts.apply_timeouts(
             using=options["database"],
