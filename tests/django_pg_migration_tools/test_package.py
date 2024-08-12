@@ -1,4 +1,4 @@
-import django_pg_migration_tools as package  # fmt: skip
+import django_pg_migration_tools as package
 
 
 def test_has_docstring():
