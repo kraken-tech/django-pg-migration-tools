@@ -29,6 +29,8 @@ class SaferAddIndexConcurrently(
     differences.
     """
 
+    reversible = True
+
     atomic = False
 
     SHOW_LOCK_TIMEOUT_QUERY = "SHOW lock_timeout;"
@@ -152,7 +154,3 @@ class SaferAddIndexConcurrently(
             [],
             {"model_name": self.model_name, "index": self.index},
         )
-
-    @property
-    def reversible(self) -> bool:  # type: ignore[override]
-        return True
