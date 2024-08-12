@@ -1,0 +1,40 @@
+name: Linting
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 1
+
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+          cache-dependency-path: |
+            pyproject.toml
+            requirements/*.txt
+            noxfile.py
+
+      - name: Make a virtualenv
+        run: python3 -m venv .venv
+
+      - name: Install requirements
+        run: |
+          source .venv/bin/activate
+          pip install uv==0.1.40
+          make install_python_packages
+
+      - name: Run linters
+        run: |
+          source .venv/bin/activate
+          make lint

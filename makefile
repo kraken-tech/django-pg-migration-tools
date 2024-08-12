@@ -1,6 +1,18 @@
 PIP_VERSION=24.0
 SHELL=/bin/bash
 
+.PHONY:help
+help:
+	@echo "Available targets:"
+	@echo "  clean: Remove all build artifacts at the build/ directory."
+	@echo "  dev: Install dev dependencies."
+	@echo "  docs: Build the docs at the build/ directory"
+	@echo "  help: Show this help message."
+	@echo "  lint: Run formatters and static analysis checks."
+	@echo "  matrix_test: Run matrix testing locally."
+	@echo "  test: Run tests locally."
+	@echo "  update: Update package dependencies."
+
 # Standard entry points
 # =====================
 
