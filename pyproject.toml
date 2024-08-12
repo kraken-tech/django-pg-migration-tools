@@ -125,6 +125,7 @@ section-order = [
 [tool.mypy]
 files = "."
 exclude = "build/"
+plugins = ["mypy_django_plugin.main"]
 
 # Use strict defaults
 strict = true
@@ -136,6 +137,9 @@ warn_no_return = true
 module = "tests.*"
 allow_untyped_defs = true
 disable_error_code = "attr-defined"
+
+[tool.django-stubs]
+django_settings_module = "tests.example_app.settings"
 
 # Pytest
 # ------
