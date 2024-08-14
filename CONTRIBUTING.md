@@ -156,3 +156,40 @@ make dev
 
 This will sync your installed packages with the updated versions pinned in
 `requirements/development.txt`.
+
+## Publishing
+
+This package is built and uploaded to PyPI automatically by the
+`build_and_publish` workflow in GitHub Actions. This workflow will be run
+whenever a tag is pushed for a new version; the tag must start with v.
+
+To publish a new version of this package:
+
+1. Update the version in pyproject.toml.
+2. Check all changes have been recorded in the changelog.
+3. Add a heading in the changelog for the new version, including today's date.
+4. Commit the changes and open a PR.
+5. Once the PR is approved, rebase the branch to get the latest changes and tag
+   the merge commit with the new version:
+   ```sh
+   git tag 'v0.0.0'
+   git push origin --tags
+   ```
+6. The build_and_publish workflow will verify that the tag, package version,
+   and changelog all contain the same version number and publish the package
+   to PyPI.
+
+### The publishing workflow failed, what can I do?
+
+If the build_and_publish workflow failed, the package will not be published to
+PyPI. After doing whatever is needed to fix the workflow you can:
+
+1. Rebase and push your branch.
+2. Force the regeneration for the tag:
+   ```sh
+   git tag v0.0.0 -f
+   ```
+3. Then update the tag on the remote:
+   ```sh
+   git push origin v0.0.0 -f
+   ```
