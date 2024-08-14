@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2024-08-12
+
 ### Added
 
-- Describe your changes here.
+- `apply_timeouts` context manager for controlling the values of lock_timeout
+  and statement_timeout.
+- `migrate_with_timeouts` management command that applies lock_timeout and
+  statement_timeout to Django's migrate command.
+- `SaferAddIndexConcurrently` migration operation to create new Postgres
+  indexes in a safer, idempotent way.
