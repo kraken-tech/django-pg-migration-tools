@@ -21,7 +21,7 @@ where = ["src"]
 
 [project]
 name = "django_pg_migration_tools"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tools for making Django migrations safer and more scalable."
 license.file = "LICENSE"
 readme = "README.md"
@@ -45,6 +45,7 @@ classifiers = [
 # additional URLs that can be included here.
 repository = "https://github.com/kraken-tech/django-pg-migration-tools"
 changelog = "https://github.com/kraken-tech/django-pg-migration-tools/blob/main/CHANGELOG.md"
+docs = "https://django-pg-migration-tools.readthedocs.io/"
 
 [project.optional-dependencies]
 # Used for running the test matrix via `nox` locally or by remote checks.
