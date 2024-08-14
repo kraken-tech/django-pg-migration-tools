@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2024-08-14
+
+- Non-functional changes for the documentation to be properly linked in PyPI.
+
 ## [0.1.0] - 2024-08-12
 
 ### Added
