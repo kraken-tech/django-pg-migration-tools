@@ -55,14 +55,8 @@ Function Definitions
    :return: yields the result.
    :rtype: Iterator[None]
 
-Example Usage
--------------
-
-Here are some examples of how to use the ``apply_timeouts`` function.
-
-======================
-Example 1: Basic Usage
-======================
+Example
+-------
 
 .. code-block:: python
 
@@ -84,48 +78,3 @@ Example 1: Basic Usage
 
        # We are back to the parent block, so lock timeout is 10s again.
        ...
-
-=====================================================
-Example 2: Invalid Parameters: Missing timeout values
-=====================================================
-
-.. code-block:: python
-
-   import datetime
-   from django_pg_migration_tools import timeouts
-
-   with timeouts.apply_timeouts(
-       using="default",
-   ):
-     pass
-
-**Output:**
-
-.. code-block:: text
-
-   django_pg_migration_tools.timeouts.TimeoutNotProvided: Caller must set at least one of `lock_timeout` or `statement_timeout`.
-
-
-=============================================================
-Example 3: Invalid Parameters: Negative timeout not permitted
-=============================================================
-
-.. code-block:: python
-
-   import datetime
-   from django_pg_migration_tools import timeouts
-
-   with timeouts.apply_timeouts(
-       using="default",
-       lock_timeout=datetime.timedelta(seconds=-5),
-       # Either lock_timeout or statement_timeout negative.
-       # The following would've raised an error as well.
-       # statement_timeout=datetime.timedelta(seconds=-5),
-   ):
-     pass
-
-**Output:**
-
-.. code-block:: text
-
-   django_pg_migration_tools.timeouts.TimeoutWasNotPositive: Timeouts must be greater than zero.
