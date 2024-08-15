@@ -1,8 +1,7 @@
 Operations
 ==========
 
-The `operations` module provides custom migration operations that help
-developers perform idempotent and safe schema changes.
+Provides custom migration operations that help developers perform idempotent and safe schema changes.
 
 Class Definitions
 -----------------
@@ -69,8 +68,8 @@ Class Definitions
       -- Reset lock_timeout to its original value ("1s" as an example).
       SET lock_timeout = '1s';
 
-    Example 1: Basic Usage of ``SaferAddIndexConcurrently``
-    -------------------------------------------------------
+    How to use
+    ----------
 
     1. Add the index to the relevant model:
 
@@ -83,13 +82,13 @@ Class Definitions
                   # existing index
                   models.Index(fields=["bar"], name="bar_idx"),
 
-    Make the new migration
+    2. Make the new migration:
 
     .. code-block:: bash
 
       ./manage.py makemigrations
 
-    Swap the AddIndex class for our own SaferAddIndexConcurrently class.
+    3. Swap the ``AddIndex`` class for our own ``SaferAddIndexConcurrently`` class.
     Remember to use a non-atomic migration.
 
     .. code-block:: diff
