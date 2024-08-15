@@ -15,7 +15,7 @@ Installation
 
 Install from pypi::
 
-    python -m pip install extended-mypy-django-plugin
+    python -m pip install django-pg-migration-tools
 
 .. toctree::
    :maxdepth: 3
