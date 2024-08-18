@@ -1,14 +1,15 @@
-Django Postgres Migration Tools Documentation
-=============================================
+Django Postgres Migration Tools
+===============================
+
+.. image:: https://img.shields.io/pypi/v/django-pg-migration-tools.svg
+    :target: https://pypi.org/project/django-pg-migration-tools
+
+.. image:: https://img.shields.io/pypi/pyversions/django-pg-migration-tools.svg
+    :alt: Python versions
+    :target: https://pypi.org/project/django-pg-migration-tools/
 
 Django Postgres Migration Tools provides extra functionalities to make Django
 migrations safer and more scalable.
-
-This package supports:
-
-- Python 3.10
-- Python 3.11
-- Python 3.12
 
 Installation
 ============
@@ -19,7 +20,7 @@ Install from pypi::
 
 .. toctree::
    :maxdepth: 3
-   :caption: Contents:
+   :caption: Contents
 
    usage/timeouts
    usage/operations

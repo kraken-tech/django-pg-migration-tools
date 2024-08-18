@@ -1,7 +1,7 @@
 Timeouts
 ========
 
-The ``timeouts`` facility provides users with the ability to set Postgres
+Provides the ability to set Postgres
 `lock_timeout
 <http://web.archive.org/web/20240607131902/https://www.postgresql.org/docs/16/runtime-config-client.html#GUC-LOCK-TIMEOUT>`_
 and `statement_timeout
@@ -12,14 +12,10 @@ values.
 
   **Why use database timeouts?**
 
-  Queries that change the database schema can get blocked because of
-  long-running transactions and queries. These blocked migration queries, in
-  turn, block subsequent queries as well. This is the basic ingredient for an
-  outage.
+  Timeouts are a way of preventing queries / transactions running for too long.
 
-  Using responsible values of ``lock_timeout`` and ``statement_timeout`` in
-  places where you might have a long-running transaction or query will help
-  preventing this type of situation in the first place.
+  Why are long-running queries a problem? It's because they can block queries that change the database schema.
+  These blocked migration queries, in turn, block subsequent queries as well, potentially causing an outage.
 
 Function Definitions
 --------------------
@@ -59,14 +55,8 @@ Function Definitions
    :return: yields the result.
    :rtype: Iterator[None]
 
-Example Usage
--------------
-
-Here are some examples of how to use the ``apply_sync`` function.
-
-======================
-Example 1: Basic Usage
-======================
+Example
+-------
 
 .. code-block:: python
 
@@ -83,53 +73,8 @@ Example 1: Basic Usage
            using="default",
            lock_timeout=datetime.timedelta(seconds=5),
        ):
-           # Code inside this block will have a lock timeout of 5s
+           # Code inside this block will have a lock timeout of 5s.
            ...
 
        # We are back to the parent block, so lock timeout is 10s again.
        ...
-
-=====================================================
-Example 2: Invalid Parameters: Missing timeout values
-=====================================================
-
-.. code-block:: python
-
-   import datetime
-   from django_pg_migration_tools import timeouts
-
-   with timeouts.apply_timeouts(
-       using="default",
-   ):
-     pass
-
-**Output:**
-
-.. code-block:: text
-
-   django_pg_migration_tools.timeouts.TimeoutNotProvided: Caller must set at least one of `lock_timeout` or `statement_timeout`.
-
-
-=============================================================
-Example 3: Invalid Parameters: Negative timeout not permitted
-=============================================================
-
-.. code-block:: python
-
-   import datetime
-   from django_pg_migration_tools import timeouts
-
-   with timeouts.apply_timeouts(
-       using="default",
-       lock_timeout=datetime.timedelta(seconds=-5),
-       # Either lock_timeout or statement_timeout negative.
-       # The following would've raised an error as well.
-       # statement_timeout=datetime.timedelta(seconds=-5),
-   ):
-     pass
-
-**Output:**
-
-.. code-block:: text
-
-   django_pg_migration_tools.timeouts.TimeoutWasNotPositive: Timeouts must be greater than zero.

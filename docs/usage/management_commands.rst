@@ -4,6 +4,8 @@ Management Commands
 migrate_with_timeouts
 ---------------------
 
+Runs database migrations with timeouts.
+
 This command wraps the :ref:`apply_timeouts() <apply_timeouts>` around
 Django's ``migrate`` command, exposing two extra arguments:
 
@@ -17,12 +19,11 @@ Django's ``migrate`` command, exposing two extra arguments:
 These arguments will set the value of Postgres' ``lock_timeout`` and
 ``statement_timeout`` for the duration of the migration.
 
-====================
-Example: Basic usage
-====================
+==========
+How to use
+==========
 
-Firstly, make sure to include ``django_pg_migration_tools`` in your
-``INSTALLED_APPS``.
+1. Include ``django_pg_migration_tools`` in your ``INSTALLED_APPS``.
 
 .. code-block:: python
 
@@ -32,7 +33,7 @@ Firstly, make sure to include ``django_pg_migration_tools`` in your
         ...
     ]
 
-Now you are all set to run the management command:
+2. Run the management command:
 
 .. code-block:: bash
 
