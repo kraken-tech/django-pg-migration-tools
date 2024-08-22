@@ -6,7 +6,7 @@ Provides custom migration operations that help developers perform idempotent and
 Class Definitions
 -----------------
 
-.. py:class:: SaferAddIndexConcurrently(model_name: str, index: models.Index)
+.. py:class:: SaferAddIndexConcurrently(model_name: str, index: models.Index, hints: Any = None)
 
     Performs CREATE INDEX CONCURRENTLY IF NOT EXISTS without a lock_timeout
     value to guarantee the index creation won't be affected by any pre-set
@@ -16,6 +16,8 @@ Class Definitions
     :type model_name: str
     :param index: Any type of index supported by Django.
     :type index: models.Index
+    :param hints: Hints to be passed to the router as per https://docs.djangoproject.com/en/5.1/topics/db/multi-db/#hints
+    :type hints: Any
 
     **Why use this SaferAddIndexConcurrently operation?**
     -----------------------------------------------------
