@@ -4,7 +4,7 @@ from textwrap import dedent
 from typing import Any
 
 from django.contrib.postgres import operations as psql_operations
-from django.db import migrations, models
+from django.db import migrations, models, router
 from django.db.backends.base import schema as base_schema
 from django.db.migrations.operations import base as migrations_base
 
@@ -49,10 +49,11 @@ class SaferAddIndexConcurrently(
 
     DROP_INDEX_QUERY = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
-    def __init__(self, model_name: str, index: models.Index) -> None:
+    def __init__(self, model_name: str, index: models.Index, hints: Any = None) -> None:
         self.model_name = model_name
         self.index = index
         self.original_lock_timeout = ""
+        self.hints = {} if hints is None else hints
 
     def describe(self) -> str:
         return (
@@ -70,6 +71,12 @@ class SaferAddIndexConcurrently(
         to_state: migrations.state.ProjectState,
     ) -> None:
         self._ensure_not_in_transaction(schema_editor)
+
+        if not router.allow_migrate(
+            schema_editor.connection.alias, app_label, **self.hints
+        ):
+            return
+
         self._ensure_no_lock_timeout_set(schema_editor)
         self._ensure_not_an_invalid_index(schema_editor)
         model = from_state.apps.get_model(app_label, self.model_name)
@@ -90,6 +97,12 @@ class SaferAddIndexConcurrently(
         to_state: migrations.state.ProjectState,
     ) -> None:
         self._ensure_not_in_transaction(schema_editor)
+
+        if not router.allow_migrate(
+            schema_editor.connection.alias, app_label, **self.hints
+        ):
+            return
+
         self._ensure_no_lock_timeout_set(schema_editor)
         model = from_state.apps.get_model(app_label, self.model_name)
         index_sql = str(self.index.remove_sql(model, schema_editor, concurrently=True))

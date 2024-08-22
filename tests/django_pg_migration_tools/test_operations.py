@@ -1,4 +1,5 @@
 from textwrap import dedent
+from typing import Any
 
 import pytest
 from django.db import (
@@ -10,7 +11,7 @@ from django.db.migrations.state import (
     ProjectState,
 )
 from django.db.models import Index
-from django.test import utils
+from django.test import override_settings, utils
 
 from django_pg_migration_tools import operations
 from tests.example_app.models import IntModel
@@ -29,6 +30,16 @@ SELECT relname
 FROM pg_class, pg_index
 WHERE (
     pg_index.indisvalid = true
+    AND pg_index.indexrelid = pg_class.oid
+    AND relname = 'int_field_idx'
+);
+"""
+
+_CHECK_INVALID_INDEX_EXISTS_QUERY = """
+SELECT relname
+FROM pg_class, pg_index
+WHERE (
+    pg_index.indisvalid = false
     AND pg_index.indexrelid = pg_class.oid
     AND relname = 'int_field_idx'
 );
@@ -55,6 +66,16 @@ SET SESSION lock_timeout = 1000;
 """
 
 
+class AllowDefaultOnly:
+    """
+    A router that only allows a migration to happen if the instance is the
+    "default" instance.
+    """
+
+    def allow_migrate(self, db: str, app_label: str, **hints: Any) -> bool:
+        return bool(hints["instance"] == "default")
+
+
 class TestSaferAddIndexConcurrently:
     app_label = "example_app"
 
@@ -74,6 +95,7 @@ class TestSaferAddIndexConcurrently:
     # Disable the overall test transaction because a concurrent index cannot
     # be triggered/tested inside of a transaction.
     @pytest.mark.django_db(transaction=True)
+    @override_settings(DATABASE_ROUTERS=[AllowDefaultOnly()])
     def test_add(self):
         with connection.cursor() as cursor:
             # We first create the index and set it to invalid, to make sure it
@@ -100,7 +122,9 @@ class TestSaferAddIndexConcurrently:
         # Set the operation that will drop the invalid index and re-create it
         # (without lock timeouts).
         index = Index(fields=["int_field"], name="int_field_idx")
-        operation = operations.SaferAddIndexConcurrently("IntModel", index)
+        operation = operations.SaferAddIndexConcurrently(
+            "IntModel", index, hints={"instance": "default"}
+        )
 
         assert operation.describe() == (
             "Concurrently creates index int_field_idx on field(s) "
@@ -182,3 +206,59 @@ class TestSaferAddIndexConcurrently:
         with connection.cursor() as cursor:
             cursor.execute(_CHECK_INDEX_EXISTS_QUERY)
             assert not cursor.fetchone()
+
+    # Disable the overall test transaction because a concurrent index cannot
+    # be triggered/tested inside of a transaction.
+    @pytest.mark.django_db(transaction=True)
+    @override_settings(DATABASE_ROUTERS=[AllowDefaultOnly()])
+    def test_when_not_allowed_to_migrate(self):
+        with connection.cursor() as cursor:
+            # We first create the index and set it to invalid, to make sure it
+            # will not be removed automatically because the operation is not
+            # allowed to run.
+            cursor.execute(_CREATE_INDEX_QUERY)
+            cursor.execute(_SET_INDEX_INVALID)
+
+        # Prove that the invalid index exists before the operation runs:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                operations.SaferAddIndexConcurrently.CHECK_INVALID_INDEX_QUERY,
+                {"index_name": "int_field_idx"},
+            )
+            assert cursor.fetchone()
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        index = Index(fields=["int_field"], name="int_field_idx")
+        operation = operations.SaferAddIndexConcurrently(
+            # Our migration should only be allowed to run if the instance
+            # equals "default" - which isn't the case here.
+            "IntModel",
+            index,
+            hints={"instance": "replica"},
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+        assert len(new_state.models[self.app_label, "intmodel"].options["indexes"]) == 1
+        assert (
+            new_state.models[self.app_label, "intmodel"].options["indexes"][0].name
+            == "int_field_idx"
+        )
+        # Proceed to try and add the index:
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+        # Make sure the invalid index was NOT been replaced by a valid index.
+        # (because the router didn't allow this migration to run).
+        with connection.cursor() as cursor:
+            cursor.execute(_CHECK_INVALID_INDEX_EXISTS_QUERY)
+            assert cursor.fetchone()
