@@ -51,6 +51,7 @@ docs = "https://django-pg-migration-tools.readthedocs.io/"
 # Used for running the test matrix via `nox` locally or by remote checks.
 # Also reused in the `dev` dependencies list.
 pytest-in-nox = [
+    "coverage>=7.6.1",
     "dj-database-url>=2.1.0",
     "django-stubs>=5.0.0",
     "environs>=11.0.0",
