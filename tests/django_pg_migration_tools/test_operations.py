@@ -20,8 +20,8 @@ from tests.example_app.models import IntModel
 _CHECK_INDEX_EXISTS_QUERY = """
 SELECT indexname FROM pg_indexes
 WHERE (
-    tablename = 'example_app_intmodel'
-    AND indexname = 'int_field_idx'
+    tablename = %(table_name)s
+    AND indexname = %(index_name)s
 );
 """
 
@@ -31,7 +31,7 @@ FROM pg_class, pg_index
 WHERE (
     pg_index.indisvalid = true
     AND pg_index.indexrelid = pg_class.oid
-    AND relname = 'int_field_idx'
+    AND relname = %(index_name)s
 );
 """
 
@@ -41,7 +41,7 @@ FROM pg_class, pg_index
 WHERE (
     pg_index.indisvalid = false
     AND pg_index.indexrelid = pg_class.oid
-    AND relname = 'int_field_idx'
+    AND relname = %(index_name)s
 );
 """
 
@@ -57,7 +57,7 @@ WHERE indexrelid = (
     SELECT c.oid
     FROM pg_class c
     JOIN pg_namespace n ON c.relnamespace = n.oid
-    WHERE c.relname = 'int_field_idx'
+    WHERE c.relname = %(index_name)s
 )::regclass;
 """
 
@@ -101,8 +101,8 @@ class TestSaferAddIndexConcurrently:
             # We first create the index and set it to invalid, to make sure it
             # will be removed automatically by the operation before re-creating
             # the index.
-            cursor.execute(_CREATE_INDEX_QUERY)
-            cursor.execute(_SET_INDEX_INVALID)
+            cursor.execute(_CREATE_INDEX_QUERY, {"index_name": "int_field_idx"})
+            cursor.execute(_SET_INDEX_INVALID, {"index_name": "int_field_idx"})
             # Also, set the lock_timeout to check it has been returned to
             # its original value once the index creation is completed.
             cursor.execute(_SET_LOCK_TIMEOUT)
@@ -153,7 +153,9 @@ class TestSaferAddIndexConcurrently:
 
         # Assert the invalid index has been replaced by a valid index.
         with connection.cursor() as cursor:
-            cursor.execute(_CHECK_VALID_INDEX_EXISTS_QUERY)
+            cursor.execute(
+                _CHECK_VALID_INDEX_EXISTS_QUERY, {"index_name": "int_field_idx"}
+            )
             assert cursor.fetchone()
 
         # Assert the lock_timeout has been set back to the default (1s)
@@ -204,7 +206,10 @@ class TestSaferAddIndexConcurrently:
 
         # Verify the index has been deleted.
         with connection.cursor() as cursor:
-            cursor.execute(_CHECK_INDEX_EXISTS_QUERY)
+            cursor.execute(
+                _CHECK_INDEX_EXISTS_QUERY,
+                {"table_name": "example_app_intmodel", "index_name": "int_field_idx"},
+            )
             assert not cursor.fetchone()
 
     # Disable the overall test transaction because a concurrent index cannot
@@ -216,8 +221,8 @@ class TestSaferAddIndexConcurrently:
             # We first create the index and set it to invalid, to make sure it
             # will not be removed automatically because the operation is not
             # allowed to run.
-            cursor.execute(_CREATE_INDEX_QUERY)
-            cursor.execute(_SET_INDEX_INVALID)
+            cursor.execute(_CREATE_INDEX_QUERY, {"index_name": "int_field_idx"})
+            cursor.execute(_SET_INDEX_INVALID, {"index_name": "int_field_idx"})
 
         # Prove that the invalid index exists before the operation runs:
         with connection.cursor() as cursor:
@@ -260,5 +265,7 @@ class TestSaferAddIndexConcurrently:
         # Make sure the invalid index was NOT been replaced by a valid index.
         # (because the router didn't allow this migration to run).
         with connection.cursor() as cursor:
-            cursor.execute(_CHECK_INVALID_INDEX_EXISTS_QUERY)
+            cursor.execute(
+                _CHECK_INVALID_INDEX_EXISTS_QUERY, {"index_name": "int_field_idx"}
+            )
             assert cursor.fetchone()
