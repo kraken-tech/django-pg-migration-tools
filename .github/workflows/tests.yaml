@@ -62,5 +62,3 @@ jobs:
         run: |
           source .venv/bin/activate
           nox
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost/django_integrity
