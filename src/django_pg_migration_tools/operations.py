@@ -9,26 +9,9 @@ from django.db.backends.base import schema as base_schema
 from django.db.migrations.operations import base as migrations_base
 
 
-class SaferAddIndexConcurrently(
+class BaseIndexOperation(
     migrations_base.Operation, psql_operations.NotInTransactionMixin
 ):
-    """
-    This class mimics the behaviour of:
-        django.contrib.postgres.operations.AddIndexConcurrently
-
-    However, it uses `django.db.migrations.operations.base.Operation` as a base
-    class due to limitations of Django's AddIndexConcurrently operation.
-
-    One such limitation is that Django's AddIndexConcurrently operation does
-    not provide easy hooks so that we can add the conditional `IF NOT EXISTS`
-    to the `CREATE INDEX CONCURRENTLY` command, which is something we must have
-    here.
-
-    As a compromise, this class implements the same input interface as Django's
-    AddIndexConcurrently, so that the developer using it doesn't "feel" any
-    differences.
-    """
-
     reversible = True
 
     atomic = False
@@ -55,15 +38,7 @@ class SaferAddIndexConcurrently(
         self.original_lock_timeout = ""
         self.hints = {} if hints is None else hints
 
-    def describe(self) -> str:
-        return (
-            f"Concurrently creates index {self.index.name} on field(s) "
-            f"{self.index.fields} of model {self.model_name} if the index "
-            f"does not exist. NOTE: Using django_pg_migration_tools "
-            f"SaferAddIndexConcurrently operation."
-        )
-
-    def database_forwards(
+    def safer_create_index(
         self,
         app_label: str,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
@@ -89,7 +64,7 @@ class SaferAddIndexConcurrently(
         schema_editor.execute(index_sql)
         self._ensure_original_lock_timeout_is_reset(schema_editor)
 
-    def database_backwards(
+    def safer_drop_index(
         self,
         app_label: str,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
@@ -153,6 +128,51 @@ class SaferAddIndexConcurrently(
         cursor.execute(
             self.SET_LOCK_TIMEOUT_QUERY, {"lock_timeout": self.original_lock_timeout}
         )
+
+
+class SaferAddIndexConcurrently(BaseIndexOperation):
+    """
+    This class mimics the behaviour of:
+        django.contrib.postgres.operations.AddIndexConcurrently
+
+    However, it uses `django.db.migrations.operations.base.Operation` as a base
+    class due to limitations of Django's AddIndexConcurrently operation.
+
+    One such limitation is that Django's AddIndexConcurrently operation does
+    not provide easy hooks so that we can add the conditional `IF NOT EXISTS`
+    to the `CREATE INDEX CONCURRENTLY` command, which is something we must have
+    here.
+
+    As a compromise, this class implements the same input interface as Django's
+    AddIndexConcurrently, so that the developer using it doesn't "feel" any
+    differences.
+    """
+
+    def describe(self) -> str:
+        return (
+            f"Concurrently creates index {self.index.name} on field(s) "
+            f"{self.index.fields} of model {self.model_name} if the index "
+            f"does not exist. NOTE: Using django_pg_migration_tools "
+            f"SaferAddIndexConcurrently operation."
+        )
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        self.safer_create_index(app_label, schema_editor, from_state, to_state)
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        self.safer_drop_index(app_label, schema_editor, from_state, to_state)
 
     # The following methods are necessary for Django to understand state
     # changes.
