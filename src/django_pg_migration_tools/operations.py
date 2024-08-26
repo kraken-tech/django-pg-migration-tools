@@ -32,9 +32,12 @@ class BaseIndexOperation(
 
     DROP_INDEX_QUERY = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
-    def __init__(self, model_name: str, index: models.Index, hints: Any = None) -> None:
+    def __init__(
+        self,
+        model_name: str,
+        hints: Any = None,
+    ) -> None:
         self.model_name = model_name
-        self.index = index
         self.original_lock_timeout = ""
         self.hints = {} if hints is None else hints
 
@@ -44,6 +47,7 @@ class BaseIndexOperation(
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
+        index: models.Index,
     ) -> None:
         self._ensure_not_in_transaction(schema_editor)
 
@@ -53,9 +57,9 @@ class BaseIndexOperation(
             return
 
         self._ensure_no_lock_timeout_set(schema_editor)
-        self._ensure_not_an_invalid_index(schema_editor)
+        self._ensure_not_an_invalid_index(schema_editor, index)
         model = from_state.apps.get_model(app_label, self.model_name)
-        index_sql = str(self.index.create_sql(model, schema_editor, concurrently=True))
+        index_sql = str(index.create_sql(model, schema_editor, concurrently=True))
         # Inject the IF NOT EXISTS because Django doesn't provide a handy
         # if_not_exists: bool parameter for us to use.
         index_sql = index_sql.replace(
@@ -70,6 +74,7 @@ class BaseIndexOperation(
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
+        index: models.Index,
     ) -> None:
         self._ensure_not_in_transaction(schema_editor)
 
@@ -80,7 +85,7 @@ class BaseIndexOperation(
 
         self._ensure_no_lock_timeout_set(schema_editor)
         model = from_state.apps.get_model(app_label, self.model_name)
-        index_sql = str(self.index.remove_sql(model, schema_editor, concurrently=True))
+        index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         # Differently from the CREATE INDEX operation, Django already provides
         # us with IF EXISTS when dropping an index... We don't have to do that
         # .replace() call here.
@@ -99,6 +104,7 @@ class BaseIndexOperation(
     def _ensure_not_an_invalid_index(
         self,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        index: models.Index,
     ) -> None:
         """
         It is possible that the migration would have failed when:
@@ -116,9 +122,9 @@ class BaseIndexOperation(
         be recreated on next steps via CREATE INDEX CONCURRENTLY IF EXISTS.
         """
         cursor = schema_editor.connection.cursor()
-        cursor.execute(self.CHECK_INVALID_INDEX_QUERY, {"index_name": self.index.name})
+        cursor.execute(self.CHECK_INVALID_INDEX_QUERY, {"index_name": index.name})
         if cursor.fetchone():
-            cursor.execute(self.DROP_INDEX_QUERY.format(self.index.name))
+            cursor.execute(self.DROP_INDEX_QUERY.format(index.name))
 
     def _ensure_original_lock_timeout_is_reset(
         self,
@@ -148,6 +154,15 @@ class SaferAddIndexConcurrently(BaseIndexOperation):
     differences.
     """
 
+    def __init__(
+        self,
+        model_name: str,
+        index: models.Index,
+        hints: Any = None,
+    ) -> None:
+        self.index = index
+        super().__init__(model_name=model_name, hints=hints)
+
     def describe(self) -> str:
         return (
             f"Concurrently creates index {self.index.name} on field(s) "
@@ -163,7 +178,9 @@ class SaferAddIndexConcurrently(BaseIndexOperation):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
-        self.safer_create_index(app_label, schema_editor, from_state, to_state)
+        self.safer_create_index(
+            app_label, schema_editor, from_state, to_state, self.index
+        )
 
     def database_backwards(
         self,
@@ -172,7 +189,9 @@ class SaferAddIndexConcurrently(BaseIndexOperation):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
-        self.safer_drop_index(app_label, schema_editor, from_state, to_state)
+        self.safer_drop_index(
+            app_label, schema_editor, from_state, to_state, self.index
+        )
 
     # The following methods are necessary for Django to understand state
     # changes.
