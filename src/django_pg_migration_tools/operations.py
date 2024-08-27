@@ -1,21 +1,13 @@
 from __future__ import annotations
 
 from textwrap import dedent
-from typing import Any
 
 from django.contrib.postgres import operations as psql_operations
-from django.db import migrations, models, router
+from django.db import migrations, models
 from django.db.backends.base import schema as base_schema
-from django.db.migrations.operations import base as migrations_base
 
 
-class BaseIndexOperation(
-    migrations_base.Operation, psql_operations.NotInTransactionMixin
-):
-    reversible = True
-
-    atomic = False
-
+class BaseIndexOperation:
     SHOW_LOCK_TIMEOUT_QUERY = "SHOW lock_timeout;"
 
     SET_LOCK_TIMEOUT_QUERY = "SET lock_timeout = %(lock_timeout)s;"
@@ -32,15 +24,6 @@ class BaseIndexOperation(
 
     DROP_INDEX_QUERY = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
-    def __init__(
-        self,
-        model_name: str,
-        hints: Any = None,
-    ) -> None:
-        self.model_name = model_name
-        self.original_lock_timeout = ""
-        self.hints = {} if hints is None else hints
-
     def safer_create_index(
         self,
         app_label: str,
@@ -48,17 +31,16 @@ class BaseIndexOperation(
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
         index: models.Index,
+        model: type[models.Model],
+        operation: SaferAddIndexConcurrently,
     ) -> None:
-        self._ensure_not_in_transaction(schema_editor)
+        operation._ensure_not_in_transaction(schema_editor)
 
-        if not router.allow_migrate(
-            schema_editor.connection.alias, app_label, **self.hints
-        ):
+        if not operation.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
         self._ensure_no_lock_timeout_set(schema_editor)
         self._ensure_not_an_invalid_index(schema_editor, index)
-        model = from_state.apps.get_model(app_label, self.model_name)
         index_sql = str(index.create_sql(model, schema_editor, concurrently=True))
         # Inject the IF NOT EXISTS because Django doesn't provide a handy
         # if_not_exists: bool parameter for us to use.
@@ -75,16 +57,15 @@ class BaseIndexOperation(
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
         index: models.Index,
+        model: type[models.Model],
+        operation: SaferAddIndexConcurrently,
     ) -> None:
-        self._ensure_not_in_transaction(schema_editor)
+        operation._ensure_not_in_transaction(schema_editor)
 
-        if not router.allow_migrate(
-            schema_editor.connection.alias, app_label, **self.hints
-        ):
+        if not operation.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
         self._ensure_no_lock_timeout_set(schema_editor)
-        model = from_state.apps.get_model(app_label, self.model_name)
         index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         # Differently from the CREATE INDEX operation, Django already provides
         # us with IF EXISTS when dropping an index... We don't have to do that
@@ -136,32 +117,20 @@ class BaseIndexOperation(
         )
 
 
-class SaferAddIndexConcurrently(BaseIndexOperation):
+class SaferAddIndexConcurrently(
+    BaseIndexOperation, psql_operations.AddIndexConcurrently
+):
     """
-    This class mimics the behaviour of:
+    This class inherits the behaviour of:
         django.contrib.postgres.operations.AddIndexConcurrently
 
-    However, it uses `django.db.migrations.operations.base.Operation` as a base
-    class due to limitations of Django's AddIndexConcurrently operation.
-
-    One such limitation is that Django's AddIndexConcurrently operation does
-    not provide easy hooks so that we can add the conditional `IF NOT EXISTS`
-    to the `CREATE INDEX CONCURRENTLY` command, which is something we must have
-    here.
-
-    As a compromise, this class implements the same input interface as Django's
-    AddIndexConcurrently, so that the developer using it doesn't "feel" any
-    differences.
+    However, it overrides the relevant database_forwards and database_backwards
+    operations to take into consideration lock timeouts, invalid indexes, and
+    idempotency.
     """
 
-    def __init__(
-        self,
-        model_name: str,
-        index: models.Index,
-        hints: Any = None,
-    ) -> None:
-        self.index = index
-        super().__init__(model_name=model_name, hints=hints)
+    model_name: str
+    index: models.Index
 
     def describe(self) -> str:
         return (
@@ -178,8 +147,15 @@ class SaferAddIndexConcurrently(BaseIndexOperation):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
+        model = to_state.apps.get_model(app_label, self.model_name)
         self.safer_create_index(
-            app_label, schema_editor, from_state, to_state, self.index
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            index=self.index,
+            model=model,
+            operation=self,
         )
 
     def database_backwards(
@@ -189,20 +165,13 @@ class SaferAddIndexConcurrently(BaseIndexOperation):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
+        model = from_state.apps.get_model(app_label, self.model_name)
         self.safer_drop_index(
-            app_label, schema_editor, from_state, to_state, self.index
-        )
-
-    # The following methods are necessary for Django to understand state
-    # changes.
-    def state_forwards(
-        self, app_label: str, state: migrations.state.ProjectState
-    ) -> None:
-        state.add_index(app_label, self.model_name.lower(), self.index)
-
-    def deconstruct(self) -> tuple[str, list[Any], dict[str, Any]]:
-        return (
-            self.__class__.__qualname__,
-            [],
-            {"model_name": self.model_name, "index": self.index},
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            index=self.index,
+            model=model,
+            operation=self,
         )

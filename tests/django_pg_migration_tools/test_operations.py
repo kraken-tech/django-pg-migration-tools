@@ -66,14 +66,13 @@ SET SESSION lock_timeout = 1000;
 """
 
 
-class AllowDefaultOnly:
+class NeverAllow:
     """
-    A router that only allows a migration to happen if the instance is the
-    "default" instance.
+    A router that never allows a migration to happen.
     """
 
     def allow_migrate(self, db: str, app_label: str, **hints: Any) -> bool:
-        return bool(hints["instance"] == "default")
+        return False
 
 
 class TestSaferAddIndexConcurrently:
@@ -82,6 +81,7 @@ class TestSaferAddIndexConcurrently:
     @pytest.mark.django_db
     def test_requires_atomic_false(self):
         project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
         new_state = project_state.clone()
         operation = operations.SaferAddIndexConcurrently(
             "IntModel", Index(fields=["int_field"], name="int_field_idx")
@@ -95,7 +95,6 @@ class TestSaferAddIndexConcurrently:
     # Disable the overall test transaction because a concurrent index cannot
     # be triggered/tested inside of a transaction.
     @pytest.mark.django_db(transaction=True)
-    @override_settings(DATABASE_ROUTERS=[AllowDefaultOnly()])
     def test_add(self):
         with connection.cursor() as cursor:
             # We first create the index and set it to invalid, to make sure it
@@ -122,9 +121,7 @@ class TestSaferAddIndexConcurrently:
         # Set the operation that will drop the invalid index and re-create it
         # (without lock timeouts).
         index = Index(fields=["int_field"], name="int_field_idx")
-        operation = operations.SaferAddIndexConcurrently(
-            "IntModel", index, hints={"instance": "default"}
-        )
+        operation = operations.SaferAddIndexConcurrently("IntModel", index)
 
         assert operation.describe() == (
             "Concurrently creates index int_field_idx on field(s) "
@@ -215,7 +212,7 @@ class TestSaferAddIndexConcurrently:
     # Disable the overall test transaction because a concurrent index cannot
     # be triggered/tested inside of a transaction.
     @pytest.mark.django_db(transaction=True)
-    @override_settings(DATABASE_ROUTERS=[AllowDefaultOnly()])
+    @override_settings(DATABASE_ROUTERS=[NeverAllow()])
     def test_when_not_allowed_to_migrate(self):
         with connection.cursor() as cursor:
             # We first create the index and set it to invalid, to make sure it
@@ -237,13 +234,7 @@ class TestSaferAddIndexConcurrently:
         new_state = project_state.clone()
 
         index = Index(fields=["int_field"], name="int_field_idx")
-        operation = operations.SaferAddIndexConcurrently(
-            # Our migration should only be allowed to run if the instance
-            # equals "default" - which isn't the case here.
-            "IntModel",
-            index,
-            hints={"instance": "replica"},
-        )
+        operation = operations.SaferAddIndexConcurrently("IntModel", index)
 
         operation.state_forwards(self.app_label, new_state)
         assert len(new_state.models[self.app_label, "intmodel"].options["indexes"]) == 1
