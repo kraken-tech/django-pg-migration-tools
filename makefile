@@ -5,6 +5,9 @@ SHELL=/bin/bash
 help:
 	@echo "Available targets:"
 	@echo "  clean: Remove all build artifacts at the build/ directory."
+	@echo "  coverage: Run code coverage and print results."
+	@echo "  coverage_report: Only report on already computed coverage results."
+	@echo "  coverage_run: Only run code coverage and store results."
 	@echo "  dev: Install dev dependencies."
 	@echo "  docs: Build the docs at the build/ directory"
 	@echo "  help: Show this help message."
@@ -22,6 +25,20 @@ dev: install_python_packages .git/hooks/pre-commit
 .PHONY:test
 test:
 	python -m pytest $(PYTEST_FLAGS)
+
+.PHONY:coverage_run
+coverage_run:
+	coverage run --branch \
+	--include=src/django_pg_migration_tools/* \
+	--data-file=build/coverage \
+	-m pytest
+
+.PHONY:coverage_report
+coverage_report:
+	coverage report --format=$(COVERAGE_FORMAT) --data-file=build/coverage
+
+.PHONY:coverage
+coverage: coverage_run coverage_report
 
 .PHONY:matrix_test
 matrix_test:

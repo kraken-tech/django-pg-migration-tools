@@ -1,27 +1,17 @@
-name: Python tests
+name: Comment Coverage Report
 
-on:
-  pull_request:
-  push:
-    branches:
-      - main
+on: pull_request
+
+env:
+  REPORT_PATH: /tmp/coverage_report
 
 jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
-
-    strategy:
-      matrix:
-        postgres-image:
-          - "postgres:13"
-          - "postgres:14"
-          - "postgres:15"
-          - "postgres:16"
-
     services:
       postgres:
-        image: ${{ matrix.postgres-image }}
+        image: "postgres:16"
         env:
           POSTGRES_PASSWORD: postgres
         options: >-
@@ -31,7 +21,6 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -39,15 +28,11 @@ jobs:
       - name: Set up Python versions
         uses: actions/setup-python@v5
         with:
-          python-version: |
-            3.12
-            3.11
-            3.10
+          python-version: 3.12
           cache: 'pip'
           cache-dependency-path: |
             pyproject.toml
             requirements/*.txt
-            noxfile.py
 
       - name: Make a virtualenv
         run: python3 -m venv .venv
@@ -56,9 +41,17 @@ jobs:
         run: |
           source .venv/bin/activate
           pip install uv==0.1.40
-          uv pip install --requirement requirements/pytest-in-nox.txt
+          make install_python_packages
 
-      - name: Run the tests
+      - name: Run coverage
         run: |
           source .venv/bin/activate
-          nox
+          make coverage_run
+          echo "## Coverage Report Results" > $REPORT_PATH
+          COVERAGE_FORMAT=markdown make --quiet coverage_report >> $REPORT_PATH
+
+      - name: Comment PR with coverage report
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: /tmp/coverage_report
+          comment_tag: pr_comment

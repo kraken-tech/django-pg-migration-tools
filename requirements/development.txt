@@ -20,6 +20,8 @@ charset-normalizer==3.3.2
     # via requests
 colorlog==6.8.2
     # via nox
+coverage==7.6.1
+    # via django-pg-migration-tools (pyproject.toml)
 distlib==0.3.8
     # via virtualenv
 dj-database-url==2.2.0
