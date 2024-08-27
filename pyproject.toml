@@ -21,7 +21,7 @@ where = ["src"]
 
 [project]
 name = "django_pg_migration_tools"
-version = "0.1.2"
+version = "0.1.3"
 description = "Tools for making Django migrations safer and more scalable."
 license.file = "LICENSE"
 readme = "README.md"

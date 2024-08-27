@@ -8,6 +8,20 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.3] - 2024-09-03
+
+### Added
+
+- `SaferRemoveIndexConcurrently` migration operation to drop Postgres indexes
+  in a safer way than Django's `RemoveIndexConcurrently`.
+
+### Changed
+
+- The internal implementation for `SaferAddIndexConcurrently` has been changed
+  to inherit from Django's `AddIndexConcurrently` operation rather than
+  Django's `Operation` class. This means that the interface is now the same and
+  the "hints" argument is not valid any longer.
+
 ## [0.1.2] - 2024-08-23
 
 - Fixes a bug where the `SaferAddIndexConcurrently` class would try to perform
