@@ -29,7 +29,7 @@ filelock==3.15.4
     # via virtualenv
 iniconfig==2.0.0
     # via pytest
-marshmallow==3.21.3
+marshmallow==3.22.0
     # via environs
 nox==2024.4.15
     # via django-pg-migration-tools (pyproject.toml)
