@@ -32,7 +32,7 @@ class BaseIndexOperation:
         to_state: migrations.state.ProjectState,
         index: models.Index,
         model: type[models.Model],
-        operation: SaferAddIndexConcurrently,
+        operation: SaferAddIndexConcurrently | SaferRemoveIndexConcurrently,
     ) -> None:
         operation._ensure_not_in_transaction(schema_editor)
 
@@ -58,7 +58,7 @@ class BaseIndexOperation:
         to_state: migrations.state.ProjectState,
         index: models.Index,
         model: type[models.Model],
-        operation: SaferAddIndexConcurrently,
+        operation: SaferAddIndexConcurrently | SaferRemoveIndexConcurrently,
     ) -> None:
         operation._ensure_not_in_transaction(schema_editor)
 
@@ -172,6 +172,60 @@ class SaferAddIndexConcurrently(
             from_state=from_state,
             to_state=to_state,
             index=self.index,
+            model=model,
+            operation=self,
+        )
+
+
+class SaferRemoveIndexConcurrently(
+    BaseIndexOperation, psql_operations.RemoveIndexConcurrently
+):
+    model_name: str
+    name: str
+
+    def describe(self) -> str:
+        return (
+            f"Concurrently removes index {self.name} on model {self.model_name} "
+            "if the index exists. NOTE: Using django_pg_migration_tools "
+            f"SaferRemoveIndexConcurrently operation."
+        )
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        model = from_state.apps.get_model(app_label, self.model_name)
+        from_model_state = from_state.models[app_label, self.model_name.lower()]
+        index = from_model_state.get_index_by_name(self.name)
+        self.safer_drop_index(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            index=index,
+            model=model,
+            operation=self,
+        )
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        model = to_state.apps.get_model(app_label, self.model_name)
+        to_model_state = to_state.models[app_label, self.model_name.lower()]
+        index = to_model_state.get_index_by_name(self.name)
+        self.safer_create_index(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            index=index,
             model=model,
             operation=self,
         )
