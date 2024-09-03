@@ -12,7 +12,7 @@ babel==2.16.0
     # via sphinx
 build==1.2.1
     # via django-pg-migration-tools (pyproject.toml)
-certifi==2024.7.4
+certifi==2024.8.30
     # via requests
 cfgv==3.4.0
     # via pre-commit
@@ -42,6 +42,8 @@ docutils==0.20.1
     #   sphinx-rtd-theme
 environs==11.0.0
     # via django-pg-migration-tools (pyproject.toml)
+exceptiongroup==1.2.2
+    # via pytest
 filelock==3.15.4
     # via virtualenv
 identify==2.6.0
@@ -95,7 +97,7 @@ pytest==8.3.2
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   pytest-django
-pytest-django==4.8.0
+pytest-django==4.9.0
     # via django-pg-migration-tools (pyproject.toml)
 python-dotenv==1.0.1
     # via environs
@@ -105,7 +107,7 @@ regex==2024.7.24
     # via sphinx-lint
 requests==2.32.3
     # via sphinx
-ruff==0.6.2
+ruff==0.6.3
     # via django-pg-migration-tools (pyproject.toml)
 snowballstemmer==2.2.0
     # via sphinx
@@ -134,10 +136,19 @@ sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 sqlparse==0.5.1
     # via django
+tomli==2.0.1
+    # via
+    #   build
+    #   django-stubs
+    #   mypy
+    #   nox
+    #   pytest
+    #   sphinx
 types-pyyaml==6.0.12.20240808
     # via django-stubs
 typing-extensions==4.12.2
     # via
+    #   asgiref
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext

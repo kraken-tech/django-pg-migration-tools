@@ -25,6 +25,8 @@ django-stubs-ext==5.0.4
     # via django-stubs
 environs==11.0.0
     # via django-pg-migration-tools (pyproject.toml)
+exceptiongroup==1.2.2
+    # via pytest
 filelock==3.15.4
     # via virtualenv
 iniconfig==2.0.0
@@ -52,16 +54,22 @@ pytest==8.3.2
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   pytest-django
-pytest-django==4.8.0
+pytest-django==4.9.0
     # via django-pg-migration-tools (pyproject.toml)
 python-dotenv==1.0.1
     # via environs
 sqlparse==0.5.1
     # via django
+tomli==2.0.1
+    # via
+    #   django-stubs
+    #   nox
+    #   pytest
 types-pyyaml==6.0.12.20240808
     # via django-stubs
 typing-extensions==4.12.2
     # via
+    #   asgiref
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext
