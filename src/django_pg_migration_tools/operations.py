@@ -192,6 +192,9 @@ class SaferRemoveIndexConcurrently(
     model_name: str
     name: str
 
+    def __init__(self, model_name: str, name: str) -> None:
+        return super().__init__(model_name=model_name, name=name)
+
     def describe(self) -> str:
         return (
             f"Concurrently removes index {self.name} on model {self.model_name} "
