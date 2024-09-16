@@ -15,3 +15,10 @@ author = "Kraken Tech"
 
 extensions = ["sphinx_rtd_theme"]
 html_theme = "sphinx_rtd_theme"
+
+html_context = {
+    "display_github": True,
+    "github_user": "kraken-tech",
+    "github_repo": "django-pg-migration-tools",
+    "github_version": "main/docs/",
+}
