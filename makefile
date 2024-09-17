@@ -29,6 +29,7 @@ test:
 .PHONY:coverage_run
 coverage_run:
 	coverage run --branch \
+	--omit="__init__.py" \
 	--include=src/django_pg_migration_tools/* \
 	--data-file=build/coverage \
 	-m pytest
