@@ -1,8 +1,10 @@
+import dataclasses
 import datetime
 from typing import Any
 
 from django.core.management import base
 from django.core.management.commands.migrate import Command as DjangoMigrationMC
+from typing_extensions import Self
 
 from django_pg_migration_tools import timeouts
 
@@ -32,14 +34,26 @@ class Command(DjangoMigrationMC):
 
     @base.no_translations
     def handle(self, *args: Any, **options: Any) -> None:
+        timeout_options = MigrationTimeoutOptions.from_dictionary(options)
+        timeout_options.validate()
+
+        with timeouts.apply_timeouts(
+            using=options["database"],
+            lock_timeout=timeout_options.lock_timeout,
+            statement_timeout=timeout_options.statement_timeout,
+        ):
+            super().handle(*args, **options)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class MigrationTimeoutOptions:
+    lock_timeout: datetime.timedelta | None
+    statement_timeout: datetime.timedelta | None
+
+    @classmethod
+    def from_dictionary(cls, options: dict[str, Any]) -> Self:
         statement_timeout_in_ms: int | None = options["statement_timeout_in_ms"]
         lock_timeout_in_ms: int | None = options["lock_timeout_in_ms"]
-
-        if statement_timeout_in_ms is None and lock_timeout_in_ms is None:
-            raise ValueError(
-                "At least one of --lock-timeout-in-ms or --statement-timeout-in-ms "
-                "must be specified."
-            )
 
         statement_timeout: datetime.timedelta | None = None
         if statement_timeout_in_ms is not None:
@@ -51,9 +65,14 @@ class Command(DjangoMigrationMC):
         if lock_timeout_in_ms is not None:
             lock_timeout = datetime.timedelta(seconds=int(lock_timeout_in_ms / 1_000))
 
-        with timeouts.apply_timeouts(
-            using=options["database"],
+        return cls(
             lock_timeout=lock_timeout,
             statement_timeout=statement_timeout,
-        ):
-            super().handle(*args, **options)
+        )
+
+    def validate(self) -> None:
+        if self.statement_timeout is None and self.lock_timeout is None:
+            raise ValueError(
+                "At least one of --lock-timeout-in-ms or --statement-timeout-in-ms "
+                "must be specified."
+            )
