@@ -52,22 +52,13 @@ class MigrationTimeoutOptions:
 
     @classmethod
     def from_dictionary(cls, options: dict[str, Any]) -> Self:
-        statement_timeout_in_ms: int | None = options["statement_timeout_in_ms"]
-        lock_timeout_in_ms: int | None = options["lock_timeout_in_ms"]
-
-        statement_timeout: datetime.timedelta | None = None
-        if statement_timeout_in_ms is not None:
-            statement_timeout = datetime.timedelta(
-                seconds=int(statement_timeout_in_ms / 1_000)
-            )
-
-        lock_timeout: datetime.timedelta | None = None
-        if lock_timeout_in_ms is not None:
-            lock_timeout = datetime.timedelta(seconds=int(lock_timeout_in_ms / 1_000))
-
         return cls(
-            lock_timeout=lock_timeout,
-            statement_timeout=statement_timeout,
+            lock_timeout=_Parser.optional_positive_ms_to_timedelta(
+                options.pop("lock_timeout_in_ms", None)
+            ),
+            statement_timeout=_Parser.optional_positive_ms_to_timedelta(
+                options.pop("statement_timeout_in_ms", None)
+            ),
         )
 
     def validate(self) -> None:
@@ -76,3 +67,24 @@ class MigrationTimeoutOptions:
                 "At least one of --lock-timeout-in-ms or --statement-timeout-in-ms "
                 "must be specified."
             )
+
+
+class _Parser:
+    @classmethod
+    def optional_positive_ms_to_timedelta(
+        cls, value: int | None
+    ) -> datetime.timedelta | None:
+        if value is None:
+            return None
+        return cls.required_positive_ms_to_timedelta(value)
+
+    @classmethod
+    def required_positive_ms_to_timedelta(cls, value: int) -> datetime.timedelta:
+        value = cls.required_positive_int(value)
+        return datetime.timedelta(milliseconds=value)
+
+    @classmethod
+    def required_positive_int(cls, value: Any) -> int:
+        if (not isinstance(value, int)) or (value < 0):
+            raise ValueError(f"{value} is not a positive integer.")
+        return value
