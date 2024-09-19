@@ -4,7 +4,7 @@ alabaster==0.7.16
     # via sphinx
 babel==2.16.0
     # via sphinx
-certifi==2024.7.4
+certifi==2024.8.30
     # via requests
 charset-normalizer==3.3.2
     # via requests
@@ -54,6 +54,8 @@ sphinxcontrib-jsmath==1.0.1
 sphinxcontrib-qthelp==2.0.0
     # via sphinx
 sphinxcontrib-serializinghtml==2.0.0
+    # via sphinx
+tomli==2.0.1
     # via sphinx
 urllib3==2.2.2
     # via requests

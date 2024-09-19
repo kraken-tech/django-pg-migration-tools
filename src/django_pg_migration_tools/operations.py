@@ -180,8 +180,20 @@ class SaferAddIndexConcurrently(
 class SaferRemoveIndexConcurrently(
     BaseIndexOperation, psql_operations.RemoveIndexConcurrently
 ):
+    """
+    This class inherits the behaviour of:
+        django.contrib.postgres.operations.RemoveIndexConcurrently
+
+    However, it overrides the relevant database_forwards and database_backwards
+    operations to take into consideration lock timeouts, invalid indexes, and
+    idempotency.
+    """
+
     model_name: str
     name: str
+
+    def __init__(self, model_name: str, name: str) -> None:
+        return super().__init__(model_name=model_name, name=name)
 
     def describe(self) -> str:
         return (

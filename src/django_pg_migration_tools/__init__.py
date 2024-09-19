@@ -1,3 +1,3 @@
 """
-TODO Add a description of the package here.
+Tools to make Django migrations safer and more scalable.
 """
