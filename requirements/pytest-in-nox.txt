@@ -14,7 +14,7 @@ distlib==0.3.8
     # via virtualenv
 dj-database-url==2.2.0
     # via django-pg-migration-tools (pyproject.toml)
-django==5.1
+django==5.1.1
     # via
     #   dj-database-url
     #   django-stubs
@@ -25,7 +25,7 @@ django-stubs-ext==5.0.4
     # via django-stubs
 environs==11.0.0
     # via django-pg-migration-tools (pyproject.toml)
-filelock==3.15.4
+filelock==3.16.1
     # via virtualenv
 iniconfig==2.0.0
     # via pytest
@@ -38,27 +38,27 @@ packaging==24.1
     #   marshmallow
     #   nox
     #   pytest
-platformdirs==4.2.2
+platformdirs==4.3.6
     # via virtualenv
 pluggy==1.5.0
     # via pytest
-psycopg==3.2.1
+psycopg==3.2.2
     # via django-pg-migration-tools (pyproject.toml)
-psycopg-binary==3.2.1
+psycopg-binary==3.2.2
     # via psycopg
 psycopg2-binary==2.9.9
     # via django-pg-migration-tools (pyproject.toml)
-pytest==8.3.2
+pytest==8.3.3
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   pytest-django
-pytest-django==4.8.0
+pytest-django==4.9.0
     # via django-pg-migration-tools (pyproject.toml)
 python-dotenv==1.0.1
     # via environs
 sqlparse==0.5.1
     # via django
-types-pyyaml==6.0.12.20240808
+types-pyyaml==6.0.12.20240917
     # via django-stubs
 typing-extensions==4.12.2
     # via
@@ -66,5 +66,5 @@ typing-extensions==4.12.2
     #   django-stubs
     #   django-stubs-ext
     #   psycopg
-virtualenv==20.26.3
+virtualenv==20.26.5
     # via nox
