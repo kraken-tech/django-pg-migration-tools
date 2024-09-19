@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.4] - 2024-10-01
+
 ### Changed
 
 - The implementation of `migrate_with_timeouts` now has additional flags to
