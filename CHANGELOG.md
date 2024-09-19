@@ -8,6 +8,21 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- The implementation of `migrate_with_timeouts` now has additional flags to
+  perform retries:
+  ```bash
+  ./manage.py migrate_with_timeouts \
+    --lock-timeout-in-ms=10000 \
+    --lock-timeout-max-retries=3 \
+    --lock-timeout-retry-exp=2 \
+    --lock-timeout-retry-min-wait-in-ms=3000 \
+    --lock-timeout-retry-max-wait-in-ms=10000 \
+    --statement-timeout-in-ms=10000 \
+    --retry-callback-path="dotted.path.to.callback.function"
+  ```
+
 ## [0.1.3] - 2024-09-03
 
 ### Added

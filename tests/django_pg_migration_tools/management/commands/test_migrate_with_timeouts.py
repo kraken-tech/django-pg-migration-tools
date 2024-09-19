@@ -1,3 +1,4 @@
+import datetime
 from unittest import mock
 
 import pytest
@@ -7,9 +8,8 @@ from django.core.management.commands.migrate import Command as DjangoMigrationMC
 from django.db import connection
 from django.test import utils
 
-from django_pg_migration_tools.management.commands.migrate_with_timeouts import (
-    Command as TimeoutMigrateMC,
-)
+from django_pg_migration_tools import timeouts
+from django_pg_migration_tools.management.commands import migrate_with_timeouts
 
 
 class TestMigrateWithTimeoutsCommand:
@@ -70,17 +70,175 @@ class TestMigrateWithTimeoutsCommand:
         django_mc_args = [action.dest for action in django_mc_parser._actions]
 
         timeout_mc_parser = base.CommandParser()
-        timeout_mc = TimeoutMigrateMC()
+        timeout_mc = migrate_with_timeouts.Command()
         timeout_mc.add_arguments(timeout_mc_parser)
         timeout_mc_args = [action.dest for action in timeout_mc_parser._actions]
 
-        # All the arguments are available, except that the timeout mc has two
-        # extra arguments (--lock-timeout-in-ms, --statement-timeout-in-ms)
-        assert len(django_mc_args) == (len(timeout_mc_args) - 2)
+        # All the arguments are available, except that the timeout mc has 11
+        # extra arguments to control timeouts and the retry mechanism.
+        assert len(django_mc_args) == (len(timeout_mc_args) - 7)
+        timeout_mc_args.remove("retry_callback_path")
         timeout_mc_args.remove("lock_timeout_in_ms")
         timeout_mc_args.remove("statement_timeout_in_ms")
+        timeout_mc_args.remove("lock_timeout_max_retries")
+        timeout_mc_args.remove("lock_timeout_retry_exp")
+        timeout_mc_args.remove("lock_timeout_retry_max_wait_in_ms")
+        timeout_mc_args.remove("lock_timeout_retry_min_wait_in_ms")
         assert django_mc_args == timeout_mc_args
 
     def test_missing_timeouts(self):
         with pytest.raises(ValueError, match="At least one of"):
             management.call_command("migrate_with_timeouts")
+
+    def test_invalid_lock_retry_wait(self):
+        with pytest.raises(
+            ValueError, match="The minimum wait cannot be greater than the maximum"
+        ):
+            management.call_command(
+                "migrate_with_timeouts",
+                lock_timeout_in_ms=50_000,
+                # min > max!
+                lock_timeout_retry_min_wait_in_ms=10_000,
+                lock_timeout_retry_max_wait_in_ms=5_000,
+            )
+
+    @pytest.mark.parametrize(
+        "attr,value",
+        [
+            ("lock_timeout_max_retries", -42_000),
+            ("lock_timeout_retry_exp", -50_000),
+            ("lock_timeout_retry_max_wait_in_ms", -10_000),
+            ("lock_timeout_retry_min_wait_in_ms", -40_000),
+        ],
+    )
+    def test_forbidden_negative_value(self, attr, value):
+        negative_attr = {attr: value}
+        with pytest.raises(ValueError, match="is not a positive integer."):
+            management.call_command(
+                "migrate_with_timeouts",
+                lock_timeout_in_ms=50_000,
+                **negative_attr,
+            )
+
+    def test_invalid_callback_path(self):
+        with pytest.raises(ModuleNotFoundError, match="No module named 'this.path'"):
+            management.call_command(
+                "migrate_with_timeouts",
+                lock_timeout_in_ms=50_000,
+                retry_callback_path="this.path.does.not.exist",
+            )
+
+    @pytest.mark.django_db(transaction=True)
+    @mock.patch("time.sleep", autospec=True)
+    @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
+    def test_lock_timeout_retries_failed(self, mock_handle, mock_sleep):
+        mock_handle.side_effect = [
+            timeouts.DBLockTimeoutError("Bang!"),
+            timeouts.DBLockTimeoutError("Bang!"),
+            timeouts.DBLockTimeoutError("Bang!"),
+            timeouts.DBLockTimeoutError("Bang!"),
+        ]
+        with pytest.raises(
+            base.CommandError,
+            match=(
+                "There were 4 lock timeouts. This happened because "
+                "--lock-timeout-max-retries was set to 3."
+            ),
+        ):
+            management.call_command(
+                "migrate_with_timeouts",
+                lock_timeout_in_ms=50_000,
+                lock_timeout_max_retries=3,
+            )
+
+    @pytest.mark.django_db(transaction=True)
+    @mock.patch("time.sleep", autospec=True)
+    @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
+    def test_retry_callback_is_called(self, mock_handle, mock_sleep):
+        mock_handle.side_effect = [timeouts.DBLockTimeoutError("Bang!")]
+        with pytest.raises(
+            Exception, match="Prove callback is called by blowing it up."
+        ):
+            management.call_command(
+                "migrate_with_timeouts",
+                lock_timeout_in_ms=50_000,
+                lock_timeout_max_retries=2,
+                retry_callback_path=f"{__name__}.example_callback",
+            )
+
+
+class TestMigrateRetryStrategy:
+    @mock.patch(
+        "django_pg_migration_tools.management.commands.migrate_with_timeouts.MigrateRetryStrategy.can_migrate",
+        autospec=True,
+    )
+    @mock.patch("time.sleep", autospec=True)
+    @pytest.mark.parametrize(
+        "exp,min_wait,max_wait,current_attempt,expected_result",
+        [
+            pytest.param(
+                2,
+                datetime.timedelta(seconds=1),
+                datetime.timedelta(seconds=20),
+                2,
+                4,  # 2**2
+                id="Basic scenario with 2 exponential.",
+            ),
+            pytest.param(
+                2,
+                datetime.timedelta(seconds=40),
+                datetime.timedelta(seconds=20),
+                2,
+                40,  # min value takes over (40 seconds).
+                id="The min_wait is longer than the calculated exponential.",
+            ),
+            pytest.param(
+                5,
+                datetime.timedelta(seconds=1),
+                datetime.timedelta(seconds=50),
+                10,
+                50,  # max value takes over (50 seconds).
+                id="The max_wait is shorter than the calculated exponential.",
+            ),
+            pytest.param(
+                5,
+                datetime.timedelta(seconds=1),
+                datetime.timedelta(seconds=42),
+                123456789,
+                42,  # max value takes over (42 seconds).
+                id="Calculation overflows and max_wait is taken instead.",
+            ),
+        ],
+    )
+    def test_wait_function(
+        self,
+        mock_sleep,
+        mock_can_migrate,
+        exp,
+        min_wait,
+        max_wait,
+        current_attempt,
+        expected_result,
+    ):
+        mock_can_migrate.return_value = True
+
+        retry_strategy = migrate_with_timeouts.MigrateRetryStrategy(
+            timeout_options=migrate_with_timeouts.MigrationTimeoutOptions(
+                lock_timeout=None,
+                statement_timeout=None,
+                retry_callback=None,
+                lock_retry_options=migrate_with_timeouts.TimeoutRetryOptions(
+                    max_retries=999,
+                    exp=exp,
+                    min_wait=min_wait,
+                    max_wait=max_wait,
+                ),
+            )
+        )
+        retry_strategy.retries = current_attempt
+        retry_strategy.wait()
+        mock_sleep.assert_called_once_with(expected_result)
+
+
+def example_callback(retry_state: migrate_with_timeouts.RetryState) -> None:
+    raise Exception("Prove callback is called by blowing it up.")
