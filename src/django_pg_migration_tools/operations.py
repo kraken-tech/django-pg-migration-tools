@@ -5,9 +5,13 @@ from textwrap import dedent
 from django.contrib.postgres import operations as psql_operations
 from django.db import migrations, models
 from django.db.backends.base import schema as base_schema
+from django.db.migrations.operations import base as base_operations
 
 
-class BaseIndexOperation:
+class BaseIndexOperation(
+    psql_operations.NotInTransactionMixin,
+    base_operations.Operation,
+):
     SHOW_LOCK_TIMEOUT_QUERY = "SHOW lock_timeout;"
 
     SET_LOCK_TIMEOUT_QUERY = "SET lock_timeout = %(lock_timeout)s;"
@@ -32,11 +36,10 @@ class BaseIndexOperation:
         to_state: migrations.state.ProjectState,
         index: models.Index,
         model: type[models.Model],
-        operation: SaferAddIndexConcurrently | SaferRemoveIndexConcurrently,
     ) -> None:
-        operation._ensure_not_in_transaction(schema_editor)
+        self._ensure_not_in_transaction(schema_editor)
 
-        if not operation.allow_migrate_model(schema_editor.connection.alias, model):
+        if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
         self._ensure_no_lock_timeout_set(schema_editor)
@@ -58,11 +61,10 @@ class BaseIndexOperation:
         to_state: migrations.state.ProjectState,
         index: models.Index,
         model: type[models.Model],
-        operation: SaferAddIndexConcurrently | SaferRemoveIndexConcurrently,
     ) -> None:
-        operation._ensure_not_in_transaction(schema_editor)
+        self._ensure_not_in_transaction(schema_editor)
 
-        if not operation.allow_migrate_model(schema_editor.connection.alias, model):
+        if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
         self._ensure_no_lock_timeout_set(schema_editor)
@@ -155,7 +157,6 @@ class SaferAddIndexConcurrently(
             to_state=to_state,
             index=self.index,
             model=model,
-            operation=self,
         )
 
     def database_backwards(
@@ -173,7 +174,6 @@ class SaferAddIndexConcurrently(
             to_state=to_state,
             index=self.index,
             model=model,
-            operation=self,
         )
 
 
@@ -207,7 +207,6 @@ class SaferRemoveIndexConcurrently(
             to_state=to_state,
             index=index,
             model=model,
-            operation=self,
         )
 
     def database_backwards(
