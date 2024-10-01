@@ -4,7 +4,7 @@ alabaster==0.7.16
     # via sphinx
 babel==2.16.0
     # via sphinx
-certifi==2024.7.4
+certifi==2024.8.30
     # via requests
 charset-normalizer==3.3.2
     # via requests
@@ -12,7 +12,7 @@ docutils==0.20.1
     # via
     #   sphinx
     #   sphinx-rtd-theme
-idna==3.8
+idna==3.10
     # via requests
 imagesize==1.4.1
     # via sphinx
@@ -26,7 +26,7 @@ polib==1.2.0
     # via sphinx-lint
 pygments==2.18.0
     # via sphinx
-regex==2024.7.24
+regex==2024.9.11
     # via sphinx-lint
 requests==2.32.3
     # via sphinx
@@ -37,7 +37,7 @@ sphinx==7.4.7
     #   django-pg-migration-tools (pyproject.toml)
     #   sphinx-rtd-theme
     #   sphinxcontrib-jquery
-sphinx-lint==0.9.1
+sphinx-lint==1.0.0
     # via django-pg-migration-tools (pyproject.toml)
 sphinx-rtd-theme==2.0.0
     # via django-pg-migration-tools (pyproject.toml)
@@ -55,5 +55,5 @@ sphinxcontrib-qthelp==2.0.0
     # via sphinx
 sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
-urllib3==2.2.2
+urllib3==2.2.3
     # via requests
