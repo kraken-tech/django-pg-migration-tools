@@ -1,5 +1,6 @@
 PIP_VERSION=24.0
 SHELL=/bin/bash
+COVERAGE_FILE=build/coverage
 
 .PHONY:help
 help:
@@ -30,12 +31,12 @@ test:
 coverage_run:
 	coverage run --branch \
 	--include=src/django_pg_migration_tools/* \
-	--data-file=build/coverage \
+	--data-file=$(COVERAGE_FILE) \
 	-m pytest
 
 .PHONY:coverage_report
 coverage_report:
-	coverage report --skip-empty --format=$(COVERAGE_FORMAT) --data-file=build/coverage
+	coverage report --skip-empty --format=$(COVERAGE_FORMAT) --data-file=$(COVERAGE_FILE)
 
 .PHONY:coverage
 coverage: coverage_run coverage_report
