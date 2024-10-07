@@ -19,9 +19,9 @@ django==5.1.1
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext
-django-stubs==5.0.4
+django-stubs==5.1.0
     # via django-pg-migration-tools (pyproject.toml)
-django-stubs-ext==5.0.4
+django-stubs-ext==5.1.0
     # via django-stubs
 environs==11.0.0
     # via django-pg-migration-tools (pyproject.toml)
@@ -42,9 +42,9 @@ platformdirs==4.3.6
     # via virtualenv
 pluggy==1.5.0
     # via pytest
-psycopg==3.2.2
+psycopg==3.2.3
     # via django-pg-migration-tools (pyproject.toml)
-psycopg-binary==3.2.2
+psycopg-binary==3.2.3
     # via psycopg
 psycopg2-binary==2.9.9
     # via django-pg-migration-tools (pyproject.toml)
@@ -66,5 +66,5 @@ typing-extensions==4.12.2
     #   django-stubs
     #   django-stubs-ext
     #   psycopg
-virtualenv==20.26.5
+virtualenv==20.26.6
     # via nox
