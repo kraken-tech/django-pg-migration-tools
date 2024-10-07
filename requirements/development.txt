@@ -10,7 +10,7 @@ asgiref==3.8.1
     #   django-stubs
 babel==2.16.0
     # via sphinx
-build==1.2.2
+build==1.2.2.post1
     # via django-pg-migration-tools (pyproject.toml)
 certifi==2024.8.30
     # via requests
@@ -32,9 +32,9 @@ django==5.1.1
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext
-django-stubs==5.0.4
+django-stubs==5.1.0
     # via django-pg-migration-tools (pyproject.toml)
-django-stubs-ext==5.0.4
+django-stubs-ext==5.1.0
     # via django-stubs
 docutils==0.20.1
     # via
@@ -79,17 +79,17 @@ pluggy==1.5.0
     # via pytest
 polib==1.2.0
     # via sphinx-lint
-pre-commit==3.8.0
+pre-commit==4.0.0
     # via django-pg-migration-tools (pyproject.toml)
-psycopg==3.2.2
+psycopg==3.2.3
     # via django-pg-migration-tools (pyproject.toml)
-psycopg-binary==3.2.2
+psycopg-binary==3.2.3
     # via psycopg
 psycopg2-binary==2.9.9
     # via django-pg-migration-tools (pyproject.toml)
 pygments==2.18.0
     # via sphinx
-pyproject-hooks==1.1.0
+pyproject-hooks==1.2.0
     # via build
 pytest==8.3.3
     # via
@@ -105,7 +105,7 @@ regex==2024.9.11
     # via sphinx-lint
 requests==2.32.3
     # via sphinx
-ruff==0.6.5
+ruff==0.6.9
     # via django-pg-migration-tools (pyproject.toml)
 snowballstemmer==2.2.0
     # via sphinx
@@ -145,7 +145,7 @@ typing-extensions==4.12.2
     #   psycopg
 urllib3==2.2.3
     # via requests
-virtualenv==20.26.5
+virtualenv==20.26.6
     # via
     #   nox
     #   pre-commit
