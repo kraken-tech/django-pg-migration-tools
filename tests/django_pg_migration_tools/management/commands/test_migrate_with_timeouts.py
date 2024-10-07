@@ -139,7 +139,7 @@ class TestMigrateWithTimeoutsCommand:
             timeouts.DBLockTimeoutError("Bang!"),
         ]
         with pytest.raises(
-            base.CommandError,
+            migrate_with_timeouts.MaximumRetriesReached,
             match=(
                 "There were 4 lock timeouts. This happened because "
                 "--lock-timeout-max-retries was set to 3."

@@ -11,6 +11,10 @@ from typing_extensions import Self
 from django_pg_migration_tools import timeouts
 
 
+class MaximumRetriesReached(base.CommandError):
+    pass
+
+
 class Command(DjangoMigrationMC):
     help = (
         "Wrapper around Django's migrate command that sets a lock_timeout "
@@ -111,7 +115,7 @@ class Command(DjangoMigrationMC):
                 retry_strategy.wait()
                 retry_strategy.attempt_callback(exc)
 
-        raise base.CommandError(
+        raise MaximumRetriesReached(
             f"Please consider trying a longer retry configuration or "
             f"investigate whether there were long-running transactions "
             f"during the migration. "
