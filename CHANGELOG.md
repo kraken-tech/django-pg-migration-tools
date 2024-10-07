@@ -8,6 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `migrate_with_timeouts` will now raise `MaximumRetriesReached` instead of
+  `CommandError` when the maximum number of retries is reached.
+
 ## [0.1.4] - 2024-10-01
 
 ### Changed
