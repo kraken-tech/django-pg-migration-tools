@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.5] - 2024-10-07
+
 ### Changed
 
 - `migrate_with_timeouts` will now raise `MaximumRetriesReached` instead of
