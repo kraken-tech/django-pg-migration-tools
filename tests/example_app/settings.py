@@ -15,6 +15,6 @@ DATABASES = {
 SECRET_KEY = "test-secret-key"
 INSTALLED_APPS = [
     "tests.example_app",
-    "src.django_pg_migration_tools",
+    "django_pg_migration_tools",
 ]
 USE_TZ = True
