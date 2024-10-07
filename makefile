@@ -1,11 +1,14 @@
 PIP_VERSION=24.0
 SHELL=/bin/bash
+COVERAGE_FILE=build/coverage
+COVERAGE_HTML_FOLDER=build/coverage_html
 
 .PHONY:help
 help:
 	@echo "Available targets:"
 	@echo "  clean: Remove all build artifacts at the build/ directory."
 	@echo "  coverage: Run code coverage and print results."
+	@echo "  coverage_html: Builds an HTML coverage report and opens it with \$$BROWSER."
 	@echo "  coverage_report: Only report on already computed coverage results."
 	@echo "  coverage_run: Only run code coverage and store results."
 	@echo "  dev: Install dev dependencies."
@@ -30,15 +33,20 @@ test:
 coverage_run:
 	coverage run --branch \
 	--include=src/django_pg_migration_tools/* \
-	--data-file=build/coverage \
+	--data-file=$(COVERAGE_FILE) \
 	-m pytest
 
 .PHONY:coverage_report
 coverage_report:
-	coverage report --skip-empty --format=$(COVERAGE_FORMAT) --data-file=build/coverage
+	coverage report --skip-empty --format=$(COVERAGE_FORMAT) --data-file=$(COVERAGE_FILE)
 
 .PHONY:coverage
 coverage: coverage_run coverage_report
+
+.PHONY:coverage_html
+coverage_html: coverage
+	coverage html --data-file=$(COVERAGE_FILE) -d $(COVERAGE_HTML_FOLDER)
+	$$BROWSER $(COVERAGE_HTML_FOLDER)/index.html
 
 .PHONY:matrix_test
 matrix_test:
