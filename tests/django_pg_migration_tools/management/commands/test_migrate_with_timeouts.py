@@ -1,4 +1,5 @@
 import datetime
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -155,10 +156,23 @@ class TestMigrateWithTimeoutsCommand:
     @mock.patch("time.sleep", autospec=True)
     @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
     def test_retry_callback_is_called(self, mock_handle, mock_sleep):
-        mock_handle.side_effect = [timeouts.DBLockTimeoutError("Bang!")]
-        with pytest.raises(
-            Exception, match="Prove callback is called by blowing it up."
-        ):
+        migration_stdout = """
+        Operations to perform:
+          Apply all migrations: ...
+        Running migrations:
+          Applying foo.0042_foo... OK
+          Applying bar.0777_bar...
+        """
+
+        def _handle_mock_side_effect(*args: Any, **kwargs: Any) -> None:
+            kwargs["stdout"].write(migration_stdout)
+            raise timeouts.DBLockTimeoutError("Bang!")
+
+        mock_handle.side_effect = _handle_mock_side_effect
+
+        # Prove the callback happened by raising the migration stdout in the
+        # error message.
+        with pytest.raises(Exception, match=migration_stdout):
             management.call_command(
                 "migrate_with_timeouts",
                 lock_timeout_in_ms=50_000,
@@ -241,4 +255,4 @@ class TestMigrateRetryStrategy:
 
 
 def example_callback(retry_state: migrate_with_timeouts.RetryState) -> None:
-    raise Exception("Prove callback is called by blowing it up.")
+    raise Exception(retry_state.stdout.getvalue())
