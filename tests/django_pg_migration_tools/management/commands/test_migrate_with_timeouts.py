@@ -154,8 +154,9 @@ class TestMigrateWithTimeoutsCommand:
 
     @pytest.mark.django_db(transaction=True)
     @mock.patch("time.sleep", autospec=True)
+    @mock.patch("time.time", autospec=True)
     @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
-    def test_retry_callback_is_called(self, mock_handle, mock_sleep):
+    def test_retry_callback_is_called(self, mock_handle, mock_time, mock_sleep):
         migration_stdout = """
         Operations to perform:
           Apply all migrations: ...
@@ -163,6 +164,9 @@ class TestMigrateWithTimeoutsCommand:
           Applying foo.0042_foo... OK
           Applying bar.0777_bar...
         """
+        # Pretend 100 seconds have passed since the migration start and before
+        # the callback was called.
+        mock_time.side_effect = [0, 100]
 
         def _handle_mock_side_effect(*args: Any, **kwargs: Any) -> None:
             kwargs["stdout"].write(migration_stdout)
@@ -170,9 +174,10 @@ class TestMigrateWithTimeoutsCommand:
 
         mock_handle.side_effect = _handle_mock_side_effect
 
-        # Prove the callback happened by raising the migration stdout in the
-        # error message.
-        with pytest.raises(Exception, match=migration_stdout):
+        # Prove the callback happened by raising the migration stdout and the
+        # value of time_since_start in the error message.
+        match = f"migration:{migration_stdout} time_since_start:100"
+        with pytest.raises(Exception, match=match):
             management.call_command(
                 "migrate_with_timeouts",
                 lock_timeout_in_ms=50_000,
@@ -255,4 +260,7 @@ class TestMigrateRetryStrategy:
 
 
 def example_callback(retry_state: migrate_with_timeouts.RetryState) -> None:
-    raise Exception(retry_state.stdout.getvalue())
+    raise Exception(
+        f"migration:{retry_state.stdout.getvalue()} "
+        f"time_since_start:{retry_state.time_since_start.total_seconds()}"
+    )
