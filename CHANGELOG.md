@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.6] - 2024-10-08
+
 ### Changed
 
 - `migrate_with_timeouts` callbacks can now access the migration stdout via
