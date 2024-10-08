@@ -103,6 +103,7 @@ class Command(DjangoMigrationMC):
         retry_strategy = MigrateRetryStrategy(timeout_options=timeout_options)
 
         stdout: io.StringIO = options.get("stdout", io.StringIO())
+        start_time: float = time.time()
         while retry_strategy.can_migrate():
             try:
                 with timeouts.apply_timeouts(
@@ -115,7 +116,7 @@ class Command(DjangoMigrationMC):
             except timeouts.DBLockTimeoutError as exc:
                 retry_strategy.increment_retry_count()
                 retry_strategy.wait()
-                retry_strategy.attempt_callback(exc, stdout)
+                retry_strategy.attempt_callback(exc, stdout, start_time)
 
         raise MaximumRetriesReached(
             f"Please consider trying a longer retry configuration or "
@@ -132,6 +133,7 @@ class RetryState:
     current_exception: timeouts.DBTimeoutError
     lock_timeouts_count: int
     stdout: io.StringIO
+    time_since_start: datetime.timedelta
 
 
 class RetryCallback(Protocol):
@@ -231,6 +233,7 @@ class MigrateRetryStrategy:
         self,
         current_exception: timeouts.DBTimeoutError,
         stdout: io.StringIO,
+        start_time: float,
     ) -> None:
         if self.timeout_options.retry_callback:
             self.timeout_options.retry_callback(
@@ -238,6 +241,9 @@ class MigrateRetryStrategy:
                     current_exception=current_exception,
                     lock_timeouts_count=self.retries,
                     stdout=stdout,
+                    time_since_start=datetime.timedelta(
+                        seconds=time.time() - start_time
+                    ),
                 )
             )
 

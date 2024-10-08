@@ -11,7 +11,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 ### Changed
 
 - `migrate_with_timeouts` callbacks can now access the migration stdout via
-  `RetryState.stdout`.
+  `RetryState.stdout` and the time since the migration started with
+  `RetryState.time_since_start`.
 - Added a new operation `SaferAddUniqueConstraint` that provides a way to
   safely create unique constraints.
 
