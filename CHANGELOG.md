@@ -8,6 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `migrate_with_timeouts` callbacks can now access the migration stdout via
+  `RetryState.stdout`.
+
 ## [0.1.5] - 2024-10-07
 
 ### Changed

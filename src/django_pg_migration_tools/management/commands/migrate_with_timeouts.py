@@ -1,6 +1,7 @@
 import dataclasses
 import datetime
 import importlib
+import io
 import time
 from typing import Any, Protocol, cast
 
@@ -101,6 +102,7 @@ class Command(DjangoMigrationMC):
         timeout_options.validate()
         retry_strategy = MigrateRetryStrategy(timeout_options=timeout_options)
 
+        stdout: io.StringIO = options.get("stdout", io.StringIO())
         while retry_strategy.can_migrate():
             try:
                 with timeouts.apply_timeouts(
@@ -108,12 +110,12 @@ class Command(DjangoMigrationMC):
                     lock_timeout=timeout_options.lock_timeout,
                     statement_timeout=timeout_options.statement_timeout,
                 ):
-                    super().handle(*args, **options)
+                    super().handle(*args, stdout=stdout, **options)
                     return
             except timeouts.DBLockTimeoutError as exc:
                 retry_strategy.increment_retry_count()
                 retry_strategy.wait()
-                retry_strategy.attempt_callback(exc)
+                retry_strategy.attempt_callback(exc, stdout)
 
         raise MaximumRetriesReached(
             f"Please consider trying a longer retry configuration or "
@@ -129,6 +131,7 @@ class Command(DjangoMigrationMC):
 class RetryState:
     current_exception: timeouts.DBTimeoutError
     lock_timeouts_count: int
+    stdout: io.StringIO
 
 
 class RetryCallback(Protocol):
@@ -224,12 +227,17 @@ class MigrateRetryStrategy:
         wait = max(min_wait.total_seconds(), min(result, max_wait.total_seconds()))
         time.sleep(wait)
 
-    def attempt_callback(self, current_exception: timeouts.DBTimeoutError) -> None:
+    def attempt_callback(
+        self,
+        current_exception: timeouts.DBTimeoutError,
+        stdout: io.StringIO,
+    ) -> None:
         if self.timeout_options.retry_callback:
             self.timeout_options.retry_callback(
                 RetryState(
                     current_exception=current_exception,
                     lock_timeouts_count=self.retries,
+                    stdout=stdout,
                 )
             )
 
