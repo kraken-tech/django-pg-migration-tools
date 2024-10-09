@@ -1,4 +1,5 @@
 import datetime
+import io
 from typing import Any
 from unittest import mock
 
@@ -31,6 +32,19 @@ class TestMigrateWithTimeoutsCommand:
         assert queries[4]["sql"] == "SET SESSION lock_timeout = '0'"
         assert queries[5]["sql"] == "SET SESSION statement_timeout = '0'"
         assert len(queries) == 6
+
+    @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
+    @pytest.mark.django_db(transaction=True)
+    def test_when_stdout_is_passed_in(self, mock_migrate_handle):
+        with pytest.raises(
+            TypeError, match="got multiple values for keyword argument 'stdout'"
+        ):
+            management.call_command(
+                "migrate_with_timeouts",
+                lock_timeout_in_ms=50_000,
+                statement_timeout_in_ms=100_000,
+                stdout=io.StringIO(),
+            )
 
     @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
     @pytest.mark.django_db(transaction=True)
