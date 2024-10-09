@@ -8,6 +8,12 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixes a bug in `migrate_with_timeouts` where passing a `stdout` parameter to
+  the command would raise a TypeError.
+  passed in.
+
 ## [0.1.6] - 2024-10-08
 
 ### Changed

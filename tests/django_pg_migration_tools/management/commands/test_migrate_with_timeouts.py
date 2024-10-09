@@ -35,16 +35,22 @@ class TestMigrateWithTimeoutsCommand:
 
     @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
     @pytest.mark.django_db(transaction=True)
-    def test_when_stdout_is_passed_in(self, mock_migrate_handle):
-        with pytest.raises(
-            TypeError, match="got multiple values for keyword argument 'stdout'"
-        ):
-            management.call_command(
-                "migrate_with_timeouts",
-                lock_timeout_in_ms=50_000,
-                statement_timeout_in_ms=100_000,
-                stdout=io.StringIO(),
-            )
+    def test_when_stdout_is_passed_in(self, mock_handle):
+        stdout = io.StringIO()
+
+        def _mock_handle_side_effect(*args: Any, **kwargs: Any) -> None:
+            kwargs["stdout"].write("hello world")
+
+        mock_handle.side_effect = _mock_handle_side_effect
+
+        management.call_command(
+            "migrate_with_timeouts",
+            lock_timeout_in_ms=50_000,
+            statement_timeout_in_ms=100_000,
+            stdout=stdout,
+        )
+
+        assert stdout.getvalue() == "hello world"
 
     @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
     @pytest.mark.django_db(transaction=True)
