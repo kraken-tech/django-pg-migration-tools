@@ -14,7 +14,7 @@ distlib==0.3.8
     # via virtualenv
 dj-database-url==2.2.0
     # via django-pg-migration-tools (pyproject.toml)
-django==5.1.1
+django==5.1.2
     # via
     #   dj-database-url
     #   django-stubs

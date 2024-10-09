@@ -26,7 +26,7 @@ distlib==0.3.8
     # via virtualenv
 dj-database-url==2.2.0
     # via django-pg-migration-tools (pyproject.toml)
-django==5.1.1
+django==5.1.2
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   dj-database-url
@@ -54,7 +54,7 @@ iniconfig==2.0.0
     # via pytest
 jinja2==3.1.4
     # via sphinx
-markupsafe==3.0.0
+markupsafe==3.0.1
     # via jinja2
 marshmallow==3.22.0
     # via environs
@@ -79,7 +79,7 @@ pluggy==1.5.0
     # via pytest
 polib==1.2.0
     # via sphinx-lint
-pre-commit==4.0.0
+pre-commit==4.0.1
     # via django-pg-migration-tools (pyproject.toml)
 psycopg==3.2.3
     # via django-pg-migration-tools (pyproject.toml)
