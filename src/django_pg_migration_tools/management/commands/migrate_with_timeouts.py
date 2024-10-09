@@ -102,7 +102,7 @@ class Command(DjangoMigrationMC):
         timeout_options.validate()
         retry_strategy = MigrateRetryStrategy(timeout_options=timeout_options)
 
-        stdout: io.StringIO = options.get("stdout", io.StringIO())
+        stdout: io.StringIO = options.pop("stdout", io.StringIO())
         start_time: float = time.time()
         while retry_strategy.can_migrate():
             try:
