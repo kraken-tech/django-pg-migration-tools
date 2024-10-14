@@ -574,7 +574,7 @@ class TestSaferAddUniqueConstraint:
 
         # Assert the lock_timeout has been set back to the default (1s)
         with connection.cursor() as cursor:
-            cursor.execute(operations.BaseIndexOperation.SHOW_LOCK_TIMEOUT_QUERY)
+            cursor.execute(operations.SafeIndexOperationManager.SHOW_LOCK_TIMEOUT_QUERY)
             assert cursor.fetchone()[0] == "1s"
 
         # Assert on the sequence of expected SQL queries:

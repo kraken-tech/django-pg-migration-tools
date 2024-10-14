@@ -9,7 +9,7 @@ from django.db.migrations.operations import base as base_operations
 from django.db.migrations.operations import models as operation_models
 
 
-class BaseIndexOperation(
+class SafeIndexOperationManager(
     psql_operations.NotInTransactionMixin,
     base_operations.Operation,
 ):
@@ -125,7 +125,7 @@ class BaseIndexOperation(
 
 
 class SaferAddIndexConcurrently(
-    BaseIndexOperation, psql_operations.AddIndexConcurrently
+    SafeIndexOperationManager, psql_operations.AddIndexConcurrently
 ):
     """
     This class inherits the behaviour of:
@@ -184,7 +184,7 @@ class SaferAddIndexConcurrently(
 
 
 class SaferRemoveIndexConcurrently(
-    BaseIndexOperation, psql_operations.RemoveIndexConcurrently
+    SafeIndexOperationManager, psql_operations.RemoveIndexConcurrently
 ):
     model_name: str
     name: str
@@ -244,7 +244,9 @@ class ConstraintAlreadyExists(ConstraintOperationError):
     pass
 
 
-class SaferAddUniqueConstraint(BaseIndexOperation, operation_models.AddConstraint):
+class SaferAddUniqueConstraint(
+    SafeIndexOperationManager, operation_models.AddConstraint
+):
     model_name: str
     constraint: models.UniqueConstraint
     raise_if_exists: bool
