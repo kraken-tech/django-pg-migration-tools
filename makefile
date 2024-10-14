@@ -11,7 +11,7 @@ help:
 	@echo "  coverage_html: Builds an HTML coverage report and opens it with \$$BROWSER."
 	@echo "  coverage_report: Only report on already computed coverage results."
 	@echo "  coverage_run: Only run code coverage and store results."
-	@echo "  dev: Install dev dependencies."
+	@echo "  dev: Install all dev dependencies and this package in editable mode."
 	@echo "  docs: Build the docs at the build/ directory"
 	@echo "  help: Show this help message."
 	@echo "  lint: Run formatters and static analysis checks."
@@ -24,6 +24,7 @@ help:
 
 .PHONY:dev
 dev: install_python_packages .git/hooks/pre-commit
+	uv pip install -e .
 
 .PHONY:test
 test:
