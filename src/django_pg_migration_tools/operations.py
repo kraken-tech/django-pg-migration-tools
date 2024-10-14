@@ -9,15 +9,13 @@ from django.db.migrations.operations import base as base_operations
 from django.db.migrations.operations import models as operation_models
 
 
-class SafeIndexOperationManager(
-    psql_operations.NotInTransactionMixin,
-    base_operations.Operation,
-):
-    SHOW_LOCK_TIMEOUT_QUERY = "SHOW lock_timeout;"
+class TimeoutQueries:
+    SHOW_LOCK_TIMEOUT = "SHOW lock_timeout;"
+    SET_LOCK_TIMEOUT = "SET lock_timeout = %(lock_timeout)s;"
 
-    SET_LOCK_TIMEOUT_QUERY = "SET lock_timeout = %(lock_timeout)s;"
 
-    CHECK_INVALID_INDEX_QUERY = dedent("""
+class IndexQueries:
+    CHECK_INVALID_INDEX = dedent("""
     SELECT relname
     FROM pg_class, pg_index
     WHERE (
@@ -26,9 +24,13 @@ class SafeIndexOperationManager(
         AND relname = %(index_name)s
     );
     """)
+    DROP_INDEX = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
-    DROP_INDEX_QUERY = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
+class SafeIndexOperationManager(
+    psql_operations.NotInTransactionMixin,
+    base_operations.Operation,
+):
     def safer_create_index(
         self,
         app_label: str,
@@ -90,14 +92,14 @@ class SafeIndexOperationManager(
         self, schema_editor: base_schema.BaseDatabaseSchemaEditor, value: str
     ) -> None:
         cursor = schema_editor.connection.cursor()
-        cursor.execute(self.SET_LOCK_TIMEOUT_QUERY, {"lock_timeout": value})
+        cursor.execute(TimeoutQueries.SET_LOCK_TIMEOUT, {"lock_timeout": value})
 
     def _show_lock_timeout(
         self,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
     ) -> str:
         cursor = schema_editor.connection.cursor()
-        cursor.execute(self.SHOW_LOCK_TIMEOUT_QUERY)
+        cursor.execute(TimeoutQueries.SHOW_LOCK_TIMEOUT)
         result = cursor.fetchone()[0]
         assert isinstance(result, str)
         return result
@@ -123,9 +125,9 @@ class SafeIndexOperationManager(
         be recreated on next steps via CREATE INDEX CONCURRENTLY IF EXISTS.
         """
         cursor = schema_editor.connection.cursor()
-        cursor.execute(self.CHECK_INVALID_INDEX_QUERY, {"index_name": index.name})
+        cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index.name})
         if cursor.fetchone():
-            cursor.execute(self.DROP_INDEX_QUERY.format(index.name))
+            cursor.execute(IndexQueries.DROP_INDEX.format(index.name))
 
 
 class SaferAddIndexConcurrently(

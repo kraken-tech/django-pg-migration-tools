@@ -136,7 +136,7 @@ class TestSaferAddIndexConcurrently:
         # Prove that the invalid index exists before the operation runs:
         with connection.cursor() as cursor:
             cursor.execute(
-                operations.SaferAddIndexConcurrently.CHECK_INVALID_INDEX_QUERY,
+                operations.IndexQueries.CHECK_INVALID_INDEX,
                 {"index_name": "int_field_idx"},
             )
             assert cursor.fetchone()
@@ -184,7 +184,7 @@ class TestSaferAddIndexConcurrently:
 
         # Assert the lock_timeout has been set back to the default (1s)
         with connection.cursor() as cursor:
-            cursor.execute(operations.SaferAddIndexConcurrently.SHOW_LOCK_TIMEOUT_QUERY)
+            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
             assert cursor.fetchone()[0] == "1s"
 
         # Assert on the sequence of expected SQL queries:
@@ -251,7 +251,7 @@ class TestSaferAddIndexConcurrently:
         # Prove that the invalid index exists before the operation runs:
         with connection.cursor() as cursor:
             cursor.execute(
-                operations.SaferAddIndexConcurrently.CHECK_INVALID_INDEX_QUERY,
+                operations.IndexQueries.CHECK_INVALID_INDEX,
                 {"index_name": "int_field_idx"},
             )
             assert cursor.fetchone()
@@ -379,9 +379,7 @@ class TestSaferRemoveIndexConcurrently:
 
         # Prove that the lock_timeout has been set back to the default (1s)
         with connection.cursor() as cursor:
-            cursor.execute(
-                operations.SaferRemoveIndexConcurrently.SHOW_LOCK_TIMEOUT_QUERY
-            )
+            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
             assert cursor.fetchone()[0] == "1s"
 
         # Assert on the sequence of expected SQL queries:
@@ -494,7 +492,7 @@ class TestSaferAddUniqueConstraint:
         # Prove that the invalid unique index exists before the operation runs:
         with connection.cursor() as cursor:
             cursor.execute(
-                operations.SaferAddUniqueConstraint.CHECK_INVALID_INDEX_QUERY,
+                operations.IndexQueries.CHECK_INVALID_INDEX,
                 {"index_name": "unique_int_field"},
             )
             assert cursor.fetchone()
@@ -574,7 +572,7 @@ class TestSaferAddUniqueConstraint:
 
         # Assert the lock_timeout has been set back to the default (1s)
         with connection.cursor() as cursor:
-            cursor.execute(operations.SafeIndexOperationManager.SHOW_LOCK_TIMEOUT_QUERY)
+            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
             assert cursor.fetchone()[0] == "1s"
 
         # Assert on the sequence of expected SQL queries:
@@ -675,7 +673,7 @@ class TestSaferAddUniqueConstraint:
         #   - The constraint doesn't exist yet.
         with connection.cursor() as cursor:
             cursor.execute(
-                operations.SaferAddUniqueConstraint.CHECK_INVALID_INDEX_QUERY,
+                operations.IndexQueries.CHECK_INVALID_INDEX,
                 {"index_name": "unique_int_field"},
             )
             assert not cursor.fetchone()
