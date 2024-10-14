@@ -192,7 +192,7 @@ class TestSaferAddIndexConcurrently:
         # later.
         assert queries[0]["sql"] == "SHOW lock_timeout;"
         # 2. Remove the timeout.
-        assert queries[1]["sql"] == "SET lock_timeout = 0;"
+        assert queries[1]["sql"] == "SET lock_timeout = '0';"
         # 3. Verify if the index is invalid.
         assert queries[2]["sql"] == dedent("""
             SELECT relname
@@ -221,7 +221,7 @@ class TestSaferAddIndexConcurrently:
                     self.app_label, editor, project_state, new_state
                 )
         assert reverse_queries[0]["sql"] == "SHOW lock_timeout;"
-        assert reverse_queries[1]["sql"] == "SET lock_timeout = 0;"
+        assert reverse_queries[1]["sql"] == "SET lock_timeout = '0';"
         assert (
             reverse_queries[2]["sql"]
             == 'DROP INDEX CONCURRENTLY IF EXISTS "int_field_idx"'
@@ -386,7 +386,7 @@ class TestSaferRemoveIndexConcurrently:
 
         # Assert on the sequence of expected SQL queries:
         assert queries[0]["sql"] == "SHOW lock_timeout;"
-        assert queries[1]["sql"] == "SET lock_timeout = 0;"
+        assert queries[1]["sql"] == "SET lock_timeout = '0';"
         assert queries[2]["sql"] == 'DROP INDEX CONCURRENTLY IF EXISTS "char_field_idx"'
         assert queries[3]["sql"] == "SET lock_timeout = '1s';"
 
@@ -399,7 +399,7 @@ class TestSaferRemoveIndexConcurrently:
                 )
 
         assert reverse_queries[0]["sql"] == "SHOW lock_timeout;"
-        assert reverse_queries[1]["sql"] == "SET lock_timeout = 0;"
+        assert reverse_queries[1]["sql"] == "SET lock_timeout = '0';"
         assert reverse_queries[2]["sql"] == dedent("""
             SELECT relname
             FROM pg_class, pg_index
@@ -589,7 +589,7 @@ class TestSaferAddUniqueConstraint:
         # later.
         assert queries[1]["sql"] == "SHOW lock_timeout;"
         # 3. Remove the timeout.
-        assert queries[2]["sql"] == "SET lock_timeout = 0;"
+        assert queries[2]["sql"] == "SET lock_timeout = '0';"
         # 4. Verify if the index is invalid.
         assert queries[3]["sql"] == dedent("""
             SELECT relname
@@ -736,7 +736,7 @@ class TestSaferAddUniqueConstraint:
         # later.
         assert queries[1]["sql"] == "SHOW lock_timeout;"
         # 3. Remove the timeout.
-        assert queries[2]["sql"] == "SET lock_timeout = 0;"
+        assert queries[2]["sql"] == "SET lock_timeout = '0';"
         # 4. Verify if the index is invalid.
         assert queries[3]["sql"] == dedent("""
             SELECT relname

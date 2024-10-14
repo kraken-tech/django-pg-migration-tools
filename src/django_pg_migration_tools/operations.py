@@ -44,7 +44,9 @@ class SafeIndexOperationManager(
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        self._ensure_no_lock_timeout_set(schema_editor)
+        original_lock_timeout = self._show_lock_timeout(schema_editor)
+        self._set_lock_timeout(schema_editor, "0")
+
         self._ensure_not_an_invalid_index(schema_editor, index)
         index_sql = str(index.create_sql(model, schema_editor, concurrently=True))
         # Inject the IF NOT EXISTS because Django doesn't provide a handy
@@ -56,7 +58,8 @@ class SafeIndexOperationManager(
             index_sql = index_sql.replace("CREATE INDEX", "CREATE UNIQUE INDEX")
 
         schema_editor.execute(index_sql)
-        self._ensure_original_lock_timeout_is_reset(schema_editor)
+
+        self._set_lock_timeout(schema_editor, original_lock_timeout)
 
     def safer_drop_index(
         self,
@@ -72,22 +75,32 @@ class SafeIndexOperationManager(
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        self._ensure_no_lock_timeout_set(schema_editor)
+        original_lock_timeout = self._show_lock_timeout(schema_editor)
+        self._set_lock_timeout(schema_editor, "0")
+
         index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         # Differently from the CREATE INDEX operation, Django already provides
         # us with IF EXISTS when dropping an index... We don't have to do that
         # .replace() call here.
         schema_editor.execute(index_sql)
-        self._ensure_original_lock_timeout_is_reset(schema_editor)
 
-    def _ensure_no_lock_timeout_set(
-        self,
-        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        self._set_lock_timeout(schema_editor, original_lock_timeout)
+
+    def _set_lock_timeout(
+        self, schema_editor: base_schema.BaseDatabaseSchemaEditor, value: str
     ) -> None:
         cursor = schema_editor.connection.cursor()
+        cursor.execute(self.SET_LOCK_TIMEOUT_QUERY, {"lock_timeout": value})
+
+    def _show_lock_timeout(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+    ) -> str:
+        cursor = schema_editor.connection.cursor()
         cursor.execute(self.SHOW_LOCK_TIMEOUT_QUERY)
-        self.original_lock_timeout = cursor.fetchone()[0]
-        cursor.execute(self.SET_LOCK_TIMEOUT_QUERY, {"lock_timeout": 0})
+        result = cursor.fetchone()[0]
+        assert isinstance(result, str)
+        return result
 
     def _ensure_not_an_invalid_index(
         self,
@@ -113,15 +126,6 @@ class SafeIndexOperationManager(
         cursor.execute(self.CHECK_INVALID_INDEX_QUERY, {"index_name": index.name})
         if cursor.fetchone():
             cursor.execute(self.DROP_INDEX_QUERY.format(index.name))
-
-    def _ensure_original_lock_timeout_is_reset(
-        self,
-        schema_editor: base_schema.BaseDatabaseSchemaEditor,
-    ) -> None:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            self.SET_LOCK_TIMEOUT_QUERY, {"lock_timeout": self.original_lock_timeout}
-        )
 
 
 class SaferAddIndexConcurrently(
