@@ -9,15 +9,13 @@ from django.db.migrations.operations import base as base_operations
 from django.db.migrations.operations import models as operation_models
 
 
-class BaseIndexOperation(
-    psql_operations.NotInTransactionMixin,
-    base_operations.Operation,
-):
-    SHOW_LOCK_TIMEOUT_QUERY = "SHOW lock_timeout;"
+class TimeoutQueries:
+    SHOW_LOCK_TIMEOUT = "SHOW lock_timeout;"
+    SET_LOCK_TIMEOUT = "SET lock_timeout = %(lock_timeout)s;"
 
-    SET_LOCK_TIMEOUT_QUERY = "SET lock_timeout = %(lock_timeout)s;"
 
-    CHECK_INVALID_INDEX_QUERY = dedent("""
+class IndexQueries:
+    CHECK_INVALID_INDEX = dedent("""
     SELECT relname
     FROM pg_class, pg_index
     WHERE (
@@ -26,9 +24,13 @@ class BaseIndexOperation(
         AND relname = %(index_name)s
     );
     """)
+    DROP_INDEX = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
-    DROP_INDEX_QUERY = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
+class SafeIndexOperationManager(
+    psql_operations.NotInTransactionMixin,
+    base_operations.Operation,
+):
     def safer_create_index(
         self,
         app_label: str,
@@ -44,7 +46,9 @@ class BaseIndexOperation(
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        self._ensure_no_lock_timeout_set(schema_editor)
+        original_lock_timeout = self._show_lock_timeout(schema_editor)
+        self._set_lock_timeout(schema_editor, "0")
+
         self._ensure_not_an_invalid_index(schema_editor, index)
         index_sql = str(index.create_sql(model, schema_editor, concurrently=True))
         # Inject the IF NOT EXISTS because Django doesn't provide a handy
@@ -56,7 +60,8 @@ class BaseIndexOperation(
             index_sql = index_sql.replace("CREATE INDEX", "CREATE UNIQUE INDEX")
 
         schema_editor.execute(index_sql)
-        self._ensure_original_lock_timeout_is_reset(schema_editor)
+
+        self._set_lock_timeout(schema_editor, original_lock_timeout)
 
     def safer_drop_index(
         self,
@@ -72,22 +77,32 @@ class BaseIndexOperation(
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        self._ensure_no_lock_timeout_set(schema_editor)
+        original_lock_timeout = self._show_lock_timeout(schema_editor)
+        self._set_lock_timeout(schema_editor, "0")
+
         index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         # Differently from the CREATE INDEX operation, Django already provides
         # us with IF EXISTS when dropping an index... We don't have to do that
         # .replace() call here.
         schema_editor.execute(index_sql)
-        self._ensure_original_lock_timeout_is_reset(schema_editor)
 
-    def _ensure_no_lock_timeout_set(
-        self,
-        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        self._set_lock_timeout(schema_editor, original_lock_timeout)
+
+    def _set_lock_timeout(
+        self, schema_editor: base_schema.BaseDatabaseSchemaEditor, value: str
     ) -> None:
         cursor = schema_editor.connection.cursor()
-        cursor.execute(self.SHOW_LOCK_TIMEOUT_QUERY)
-        self.original_lock_timeout = cursor.fetchone()[0]
-        cursor.execute(self.SET_LOCK_TIMEOUT_QUERY, {"lock_timeout": 0})
+        cursor.execute(TimeoutQueries.SET_LOCK_TIMEOUT, {"lock_timeout": value})
+
+    def _show_lock_timeout(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+    ) -> str:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(TimeoutQueries.SHOW_LOCK_TIMEOUT)
+        result = cursor.fetchone()[0]
+        assert isinstance(result, str)
+        return result
 
     def _ensure_not_an_invalid_index(
         self,
@@ -110,23 +125,12 @@ class BaseIndexOperation(
         be recreated on next steps via CREATE INDEX CONCURRENTLY IF EXISTS.
         """
         cursor = schema_editor.connection.cursor()
-        cursor.execute(self.CHECK_INVALID_INDEX_QUERY, {"index_name": index.name})
+        cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index.name})
         if cursor.fetchone():
-            cursor.execute(self.DROP_INDEX_QUERY.format(index.name))
-
-    def _ensure_original_lock_timeout_is_reset(
-        self,
-        schema_editor: base_schema.BaseDatabaseSchemaEditor,
-    ) -> None:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            self.SET_LOCK_TIMEOUT_QUERY, {"lock_timeout": self.original_lock_timeout}
-        )
+            cursor.execute(IndexQueries.DROP_INDEX.format(index.name))
 
 
-class SaferAddIndexConcurrently(
-    BaseIndexOperation, psql_operations.AddIndexConcurrently
-):
+class SaferAddIndexConcurrently(psql_operations.AddIndexConcurrently):
     """
     This class inherits the behaviour of:
         django.contrib.postgres.operations.AddIndexConcurrently
@@ -155,7 +159,7 @@ class SaferAddIndexConcurrently(
         to_state: migrations.state.ProjectState,
     ) -> None:
         model = to_state.apps.get_model(app_label, self.model_name)
-        self.safer_create_index(
+        SafeIndexOperationManager().safer_create_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -173,7 +177,7 @@ class SaferAddIndexConcurrently(
         to_state: migrations.state.ProjectState,
     ) -> None:
         model = from_state.apps.get_model(app_label, self.model_name)
-        self.safer_drop_index(
+        SafeIndexOperationManager().safer_drop_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -183,9 +187,7 @@ class SaferAddIndexConcurrently(
         )
 
 
-class SaferRemoveIndexConcurrently(
-    BaseIndexOperation, psql_operations.RemoveIndexConcurrently
-):
+class SaferRemoveIndexConcurrently(psql_operations.RemoveIndexConcurrently):
     model_name: str
     name: str
 
@@ -206,7 +208,7 @@ class SaferRemoveIndexConcurrently(
         model = from_state.apps.get_model(app_label, self.model_name)
         from_model_state = from_state.models[app_label, self.model_name.lower()]
         index = from_model_state.get_index_by_name(self.name)
-        self.safer_drop_index(
+        SafeIndexOperationManager().safer_drop_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -225,7 +227,7 @@ class SaferRemoveIndexConcurrently(
         model = to_state.apps.get_model(app_label, self.model_name)
         to_model_state = to_state.models[app_label, self.model_name.lower()]
         index = to_model_state.get_index_by_name(self.name)
-        self.safer_create_index(
+        SafeIndexOperationManager().safer_create_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -244,7 +246,7 @@ class ConstraintAlreadyExists(ConstraintOperationError):
     pass
 
 
-class SaferAddUniqueConstraint(BaseIndexOperation, operation_models.AddConstraint):
+class SaferAddUniqueConstraint(operation_models.AddConstraint):
     model_name: str
     constraint: models.UniqueConstraint
     raise_if_exists: bool
@@ -289,7 +291,7 @@ class SaferAddUniqueConstraint(BaseIndexOperation, operation_models.AddConstrain
 
         index = self._get_index_for_constraint()
         model = to_state.apps.get_model(app_label, self.model_name)
-        self.safer_create_index(
+        SafeIndexOperationManager().safer_create_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
