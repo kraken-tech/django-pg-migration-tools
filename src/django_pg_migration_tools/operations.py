@@ -130,9 +130,7 @@ class SafeIndexOperationManager(
             cursor.execute(IndexQueries.DROP_INDEX.format(index.name))
 
 
-class SaferAddIndexConcurrently(
-    SafeIndexOperationManager, psql_operations.AddIndexConcurrently
-):
+class SaferAddIndexConcurrently(psql_operations.AddIndexConcurrently):
     """
     This class inherits the behaviour of:
         django.contrib.postgres.operations.AddIndexConcurrently
@@ -161,7 +159,7 @@ class SaferAddIndexConcurrently(
         to_state: migrations.state.ProjectState,
     ) -> None:
         model = to_state.apps.get_model(app_label, self.model_name)
-        self.safer_create_index(
+        SafeIndexOperationManager().safer_create_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -179,7 +177,7 @@ class SaferAddIndexConcurrently(
         to_state: migrations.state.ProjectState,
     ) -> None:
         model = from_state.apps.get_model(app_label, self.model_name)
-        self.safer_drop_index(
+        SafeIndexOperationManager().safer_drop_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -189,9 +187,7 @@ class SaferAddIndexConcurrently(
         )
 
 
-class SaferRemoveIndexConcurrently(
-    SafeIndexOperationManager, psql_operations.RemoveIndexConcurrently
-):
+class SaferRemoveIndexConcurrently(psql_operations.RemoveIndexConcurrently):
     model_name: str
     name: str
 
@@ -212,7 +208,7 @@ class SaferRemoveIndexConcurrently(
         model = from_state.apps.get_model(app_label, self.model_name)
         from_model_state = from_state.models[app_label, self.model_name.lower()]
         index = from_model_state.get_index_by_name(self.name)
-        self.safer_drop_index(
+        SafeIndexOperationManager().safer_drop_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -231,7 +227,7 @@ class SaferRemoveIndexConcurrently(
         model = to_state.apps.get_model(app_label, self.model_name)
         to_model_state = to_state.models[app_label, self.model_name.lower()]
         index = to_model_state.get_index_by_name(self.name)
-        self.safer_create_index(
+        SafeIndexOperationManager().safer_create_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -250,9 +246,7 @@ class ConstraintAlreadyExists(ConstraintOperationError):
     pass
 
 
-class SaferAddUniqueConstraint(
-    SafeIndexOperationManager, operation_models.AddConstraint
-):
+class SaferAddUniqueConstraint(operation_models.AddConstraint):
     model_name: str
     constraint: models.UniqueConstraint
     raise_if_exists: bool
@@ -297,7 +291,7 @@ class SaferAddUniqueConstraint(
 
         index = self._get_index_for_constraint()
         model = to_state.apps.get_model(app_label, self.model_name)
-        self.safer_create_index(
+        SafeIndexOperationManager().safer_create_index(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
