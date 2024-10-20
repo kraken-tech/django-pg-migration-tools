@@ -27,6 +27,14 @@ class IndexQueries:
     DROP_INDEX = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
 
+class ConstraintQueries:
+    CHECK_EXISTING_CONSTRAINT = dedent("""
+        SELECT conname
+        FROM pg_catalog.pg_constraint
+        WHERE conname = %(constraint_name)s;
+    """)
+
+
 class SafeIndexOperationManager(
     psql_operations.NotInTransactionMixin,
     base_operations.Operation,
@@ -251,12 +259,6 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
     constraint: models.UniqueConstraint
     raise_if_exists: bool
 
-    _CHECK_EXISTING_CONSTRAINT_QUERY = dedent("""
-        SELECT conname
-        FROM pg_catalog.pg_constraint
-        WHERE conname = %(constraint_name)s;
-    """)
-
     def __init__(
         self,
         model_name: str,
@@ -354,7 +356,7 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
     ) -> bool:
         cursor = schema_editor.connection.cursor()
         cursor.execute(
-            self._CHECK_EXISTING_CONSTRAINT_QUERY,
+            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
             {"constraint_name": self.constraint.name},
         )
         return bool(cursor.fetchone())

@@ -500,7 +500,7 @@ class TestSaferAddUniqueConstraint:
         # Prove that the constraint does **not** already exist.
         with connection.cursor() as cursor:
             cursor.execute(
-                operations.SaferAddUniqueConstraint._CHECK_EXISTING_CONSTRAINT_QUERY,
+                operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
                 {"constraint_name": "unique_int_field"},
             )
             assert not cursor.fetchone()
@@ -678,7 +678,7 @@ class TestSaferAddUniqueConstraint:
             )
             assert not cursor.fetchone()
             cursor.execute(
-                operations.SaferAddUniqueConstraint._CHECK_EXISTING_CONSTRAINT_QUERY,
+                operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
                 {"constraint_name": "unique_int_field"},
             )
             assert not cursor.fetchone()
