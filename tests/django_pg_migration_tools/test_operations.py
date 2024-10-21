@@ -475,6 +475,13 @@ class TestSaferAddUniqueConstraint:
                     self.app_label, editor, project_state, new_state
                 )
 
+        # Same for backwards.
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
     # Disable the overall test transaction because a unique concurrent index
     # cannot be triggered/tested inside of a transaction.
     @pytest.mark.django_db(transaction=True)

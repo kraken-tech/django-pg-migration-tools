@@ -157,6 +157,10 @@ class SafeConstraintOperationManager(base_operations.Operation):
         model: type[models.Model],
         constraint: models.UniqueConstraint,
     ) -> None:
+        psql_operations.NotInTransactionMixin()._ensure_not_in_transaction(
+            schema_editor
+        )
+
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
@@ -199,6 +203,10 @@ class SafeConstraintOperationManager(base_operations.Operation):
         model: type[models.Model],
         constraint: models.UniqueConstraint,
     ) -> None:
+        psql_operations.NotInTransactionMixin()._ensure_not_in_transaction(
+            schema_editor
+        )
+
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
