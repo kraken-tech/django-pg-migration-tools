@@ -10,3 +10,6 @@ class CharModel(models.Model):
 
     class Meta:
         indexes = (models.Index(fields=["char_field"], name="char_field_idx"),)
+        constraints = (
+            models.UniqueConstraint(fields=["char_field"], name="unique_char_field"),
+        )

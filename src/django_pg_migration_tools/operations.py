@@ -435,3 +435,50 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
             f"index. NOTE: Using django_pg_migration_tools SaferAddUniqueConstraint "
             f"operation."
         )
+
+
+class SaferRemoveUniqueConstraint(operation_models.RemoveConstraint):
+    model_name: str
+    name: str
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        model = from_state.apps.get_model(app_label, self.model_name)
+        from_model_state = from_state.models[app_label, self.model_name.lower()]
+        SafeConstraintOperationManager().drop_constraint(
+            schema_editor=schema_editor,
+            model=model,
+            constraint=from_model_state.get_constraint_by_name(self.name),
+        )
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        model = to_state.apps.get_model(app_label, self.model_name)
+        to_model_state = to_state.models[app_label, self.model_name.lower()]
+        SafeConstraintOperationManager().create_constraint(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=model,
+            raise_if_exists=False,
+            constraint=to_model_state.get_constraint_by_name(self.name),
+        )
+
+    def describe(self) -> str:
+        return (
+            f"Checks if the constraint {self.name} exists, and if so, removes "
+            f"it. If the migration is reversed, it will recreate the constraint "
+            f"using a UNIQUE index. NOTE: Using the django_pg_migration_tools "
+            f"SaferRemoveIndexConcurrently operation."
+        )
