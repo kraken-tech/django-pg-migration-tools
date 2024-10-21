@@ -177,7 +177,6 @@ class SafeConstraintOperationManager(base_operations.Operation):
             model=model,
             unique=True,
         )
-
         # Django doesn't have a handy flag "using=..." so we need to alter the
         # SQL statement manually. We go from a SQL that looks like this:
         #
