@@ -27,6 +27,14 @@ class IndexQueries:
     DROP_INDEX = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
 
 
+class ConstraintQueries:
+    CHECK_EXISTING_CONSTRAINT = dedent("""
+        SELECT conname
+        FROM pg_catalog.pg_constraint
+        WHERE conname = %(constraint_name)s;
+    """)
+
+
 class SafeIndexOperationManager(
     psql_operations.NotInTransactionMixin,
     base_operations.Operation,
@@ -128,6 +136,126 @@ class SafeIndexOperationManager(
         cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index.name})
         if cursor.fetchone():
             cursor.execute(IndexQueries.DROP_INDEX.format(index.name))
+
+
+class ConstraintOperationError(Exception):
+    pass
+
+
+class ConstraintAlreadyExists(ConstraintOperationError):
+    pass
+
+
+class SafeConstraintOperationManager(base_operations.Operation):
+    def create_constraint(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+        raise_if_exists: bool,
+        model: type[models.Model],
+        constraint: models.UniqueConstraint,
+    ) -> None:
+        psql_operations.NotInTransactionMixin()._ensure_not_in_transaction(
+            schema_editor
+        )
+
+        if not self.allow_migrate_model(schema_editor.connection.alias, model):
+            return
+
+        if not self._can_create_constraint(schema_editor, constraint, raise_if_exists):
+            return
+
+        index = self._get_index_for_constraint(constraint)
+        SafeIndexOperationManager().safer_create_index(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            index=index,
+            model=model,
+            unique=True,
+        )
+        # Django doesn't have a handy flag "using=..." so we need to alter the
+        # SQL statement manually. We go from a SQL that looks like this:
+        #
+        # - ALTER TABLE "table" ADD CONSTRAINT "constraint" UNIQUE ("field")
+        #
+        # Into a SQL that looks like:
+        #
+        # - ALTER TABLE "table" ADD CONSTRAINT "constraint" UNIQUE USING INDEX "idx"
+        base_sql = str(constraint.create_sql(model, schema_editor))
+        alter_table_sql = base_sql.split(" UNIQUE")[0]
+        sql = f'{alter_table_sql} UNIQUE USING INDEX "{index.name}"'
+
+        # Now we can execute the schema change. We have lock timeouts back in
+        # place after creating the index that would prevent this operation from
+        # running for too long if it's blocked by another query. Otherwise,
+        # this operation should actually be quite fast - if it's not blocked -
+        # since we have created the unique index in the previous step.
+        return schema_editor.execute(sql)
+
+    def drop_constraint(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        model: type[models.Model],
+        constraint: models.UniqueConstraint,
+    ) -> None:
+        psql_operations.NotInTransactionMixin()._ensure_not_in_transaction(
+            schema_editor
+        )
+
+        if not self.allow_migrate_model(schema_editor.connection.alias, model):
+            return
+
+        if not self._constraint_exists(schema_editor, constraint):
+            # Nothing to delete.
+            return
+
+        schema_editor.remove_constraint(model, constraint)
+
+    def _can_create_constraint(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        constraint: models.UniqueConstraint,
+        raise_if_exists: bool,
+    ) -> bool:
+        constraint_exists = self._constraint_exists(schema_editor, constraint)
+        if raise_if_exists and constraint_exists:
+            raise ConstraintAlreadyExists(
+                f"Cannot create a constraint with the name "
+                f"{constraint.name} because a constraint of the same "
+                f"name already exists. If you want to skip this operation "
+                f"when the constraint already exists, run the operation "
+                f"with the flag `skip_if_exists=True`."
+            )
+        # We can't re-create a constraint that already exists because the
+        # ALTER TABLE ... ADD CONSTRAINT is not idempotent.
+        return not constraint_exists
+
+    def _get_index_for_constraint(
+        self, constraint: models.UniqueConstraint
+    ) -> models.Index:
+        return models.Index(
+            *constraint.expressions,
+            fields=constraint.fields,
+            name=constraint.name,
+            condition=constraint.condition,
+            opclasses=constraint.opclasses,  # type: ignore[attr-defined]
+        )
+
+    def _constraint_exists(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        constraint: models.UniqueConstraint,
+    ) -> bool:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
+            {"constraint_name": constraint.name},
+        )
+        return bool(cursor.fetchone())
 
 
 class SaferAddIndexConcurrently(psql_operations.AddIndexConcurrently):
@@ -238,24 +366,10 @@ class SaferRemoveIndexConcurrently(psql_operations.RemoveIndexConcurrently):
         )
 
 
-class ConstraintOperationError(Exception):
-    pass
-
-
-class ConstraintAlreadyExists(ConstraintOperationError):
-    pass
-
-
 class SaferAddUniqueConstraint(operation_models.AddConstraint):
     model_name: str
     constraint: models.UniqueConstraint
     raise_if_exists: bool
-
-    _CHECK_EXISTING_CONSTRAINT_QUERY = dedent("""
-        SELECT conname
-        FROM pg_catalog.pg_constraint
-        WHERE conname = %(constraint_name)s;
-    """)
 
     def __init__(
         self,
@@ -283,42 +397,15 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
-        if not self._can_migrate(app_label, schema_editor, from_state):
-            return
-
-        if not self._can_create_constraint(schema_editor):
-            return
-
-        index = self._get_index_for_constraint()
-        model = to_state.apps.get_model(app_label, self.model_name)
-        SafeIndexOperationManager().safer_create_index(
+        SafeConstraintOperationManager().create_constraint(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
             to_state=to_state,
-            index=index,
-            model=model,
-            unique=True,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            raise_if_exists=self.raise_if_exists,
+            constraint=self.constraint,
         )
-
-        # Django doesn't have a handy flag "using=..." so we need to alter the
-        # SQL statement manually. We go from a SQL that looks like this:
-        #
-        # - ALTER TABLE "table" ADD CONSTRAINT "constraint" UNIQUE ("field")
-        #
-        # Into a SQL that looks like:
-        #
-        # - ALTER TABLE "table" ADD CONSTRAINT "constraint" UNIQUE USING INDEX "idx"
-        base_sql = str(self.constraint.create_sql(model, schema_editor))
-        alter_table_sql = base_sql.split(" UNIQUE")[0]
-        sql = f'{alter_table_sql} UNIQUE USING INDEX "{index.name}"'
-
-        # Now we can execute the schema change. We have lock timeouts back in
-        # place after creating the index that would prevent this operation from
-        # running for too long if it's blocked by another query. Otherwise,
-        # this operation should actually be quite fast - if it's not blocked -
-        # since we have created the unique index in the previous step.
-        return schema_editor.execute(sql)
 
     def database_backwards(
         self,
@@ -327,19 +414,10 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
-        if not self._can_migrate(app_label, schema_editor, from_state):
-            return
-
-        if not self._constraint_exists(schema_editor):
-            # Nothing to delete.
-            return
-
-        # Execute the DDL that will drop the constraint.
-        super().database_backwards(
-            app_label=app_label,
+        SafeConstraintOperationManager().drop_constraint(
             schema_editor=schema_editor,
-            from_state=from_state,
-            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            constraint=self.constraint,
         )
 
     def _validate(self) -> None:
@@ -348,52 +426,6 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
                 "SaferAddUniqueConstraint only supports the UniqueConstraint class"
             )
 
-    def _constraint_exists(
-        self,
-        schema_editor: base_schema.BaseDatabaseSchemaEditor,
-    ) -> bool:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            self._CHECK_EXISTING_CONSTRAINT_QUERY,
-            {"constraint_name": self.constraint.name},
-        )
-        return bool(cursor.fetchone())
-
-    def _can_create_constraint(
-        self,
-        schema_editor: base_schema.BaseDatabaseSchemaEditor,
-    ) -> bool:
-        constraint_exists = self._constraint_exists(schema_editor)
-        if self.raise_if_exists and constraint_exists:
-            raise ConstraintAlreadyExists(
-                f"Cannot create a constraint with the name "
-                f"{self.constraint.name} because a constraint of the same "
-                f"name already exists. If you want to skip this operation "
-                f"when the constraint already exists, run the operation "
-                f"with the flag `skip_if_exists=True`."
-            )
-        # We can't re-create a constraint that already exists because the
-        # ALTER TABLE ... ADD CONSTRAINT is not idempotent.
-        return not constraint_exists
-
-    def _get_index_for_constraint(self) -> models.Index:
-        return models.Index(
-            *self.constraint.expressions,
-            fields=self.constraint.fields,
-            name=self.constraint.name,
-            condition=self.constraint.condition,
-            opclasses=self.constraint.opclasses,  # type: ignore[attr-defined]
-        )
-
-    def _can_migrate(
-        self,
-        app_label: str,
-        schema_editor: base_schema.BaseDatabaseSchemaEditor,
-        from_state: migrations.state.ProjectState,
-    ) -> bool:
-        model = from_state.apps.get_model(app_label, self.model_name)
-        return bool(self.allow_migrate_model(schema_editor.connection.alias, model))
-
     def describe(self) -> str:
         return (
             f"Concurrently adds a UNIQUE index {self.constraint.name} on model "
@@ -401,4 +433,51 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
             f"index does not exist. Then, adds the constraint using the just-created "
             f"index. NOTE: Using django_pg_migration_tools SaferAddUniqueConstraint "
             f"operation."
+        )
+
+
+class SaferRemoveUniqueConstraint(operation_models.RemoveConstraint):
+    model_name: str
+    name: str
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        model = from_state.apps.get_model(app_label, self.model_name)
+        from_model_state = from_state.models[app_label, self.model_name.lower()]
+        SafeConstraintOperationManager().drop_constraint(
+            schema_editor=schema_editor,
+            model=model,
+            constraint=from_model_state.get_constraint_by_name(self.name),
+        )
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        model = to_state.apps.get_model(app_label, self.model_name)
+        to_model_state = to_state.models[app_label, self.model_name.lower()]
+        SafeConstraintOperationManager().create_constraint(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=model,
+            raise_if_exists=False,
+            constraint=to_model_state.get_constraint_by_name(self.name),
+        )
+
+    def describe(self) -> str:
+        return (
+            f"Checks if the constraint {self.name} exists, and if so, removes "
+            f"it. If the migration is reversed, it will recreate the constraint "
+            f"using a UNIQUE index. NOTE: Using the django_pg_migration_tools "
+            f"SaferRemoveIndexConcurrently operation."
         )

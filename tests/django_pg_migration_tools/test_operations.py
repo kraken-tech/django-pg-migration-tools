@@ -475,6 +475,13 @@ class TestSaferAddUniqueConstraint:
                     self.app_label, editor, project_state, new_state
                 )
 
+        # Same for backwards.
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
     # Disable the overall test transaction because a unique concurrent index
     # cannot be triggered/tested inside of a transaction.
     @pytest.mark.django_db(transaction=True)
@@ -500,7 +507,7 @@ class TestSaferAddUniqueConstraint:
         # Prove that the constraint does **not** already exist.
         with connection.cursor() as cursor:
             cursor.execute(
-                operations.SaferAddUniqueConstraint._CHECK_EXISTING_CONSTRAINT_QUERY,
+                operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
                 {"constraint_name": "unique_int_field"},
             )
             assert not cursor.fetchone()
@@ -678,7 +685,7 @@ class TestSaferAddUniqueConstraint:
             )
             assert not cursor.fetchone()
             cursor.execute(
-                operations.SaferAddUniqueConstraint._CHECK_EXISTING_CONSTRAINT_QUERY,
+                operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
                 {"constraint_name": "unique_int_field"},
             )
             assert not cursor.fetchone()
@@ -791,7 +798,7 @@ class TestSaferAddUniqueConstraint:
             )
             assert not cursor.fetchone()
 
-    # Disable the overall test transaction because a unqiue concurrent index
+    # Disable the overall test transaction because a unique concurrent index
     # creation followed by a constraint addition cannot be triggered/tested
     # inside of a transaction.
     @pytest.mark.django_db(transaction=True)
@@ -916,3 +923,214 @@ class TestSaferAddUniqueConstraint:
                     condition=Q(),
                 ),
             )
+
+
+class TestSaferRemoveUniqueConstraint:
+    app_label = "example_app"
+
+    @pytest.mark.django_db
+    def test_requires_atomic_false(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+        operation = operations.SaferRemoveUniqueConstraint(
+            model_name="charmodel",
+            name="unique_char_field",
+        )
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # Same for backwards.
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+    @pytest.mark.django_db(transaction=True)
+    def test_operation(self):
+        # Prove that the constraint exists before the operation removes it.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
+                {"constraint_name": "unique_char_field"},
+            )
+            assert cursor.fetchone()
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveUniqueConstraint(
+            model_name="charmodel",
+            name="unique_char_field",
+        )
+
+        assert operation.describe() == (
+            "Checks if the constraint unique_char_field exists, and if so, removes "
+            "it. If the migration is reversed, it will recreate the constraint "
+            "using a UNIQUE index. NOTE: Using the django_pg_migration_tools "
+            "SaferRemoveIndexConcurrently operation."
+        )
+
+        name, args, kwargs = operation.deconstruct()
+        assert name == "SaferRemoveUniqueConstraint"
+        assert args == []
+        assert kwargs == {"model_name": "charmodel", "name": "unique_char_field"}
+
+        operation.state_forwards(self.app_label, new_state)
+        assert (
+            len(new_state.models[self.app_label, "charmodel"].options["constraints"])
+            == 0
+        )
+
+        # Proceed to remove the constraint.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # Prove the constraint is not there any longer.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
+                {"constraint_name": "unique_char_field"},
+            )
+            assert not cursor.fetchone()
+
+        # Assert on the sequence of expected SQL queries:
+        #
+        # 1. Check if the constraint exists.
+        assert queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'unique_char_field';
+            """)
+        # 2. Remove the constraint.
+        assert queries[1]["sql"] == (
+            'ALTER TABLE "example_app_charmodel" DROP CONSTRAINT "unique_char_field"'
+        )
+        # Nothing else.
+        assert len(queries) == 2
+
+        # Before reversing, set the lock_timeout value so we can observe it
+        # being re-set.
+        with connection.cursor() as cursor:
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        # Reverse the migration to recreate the constraint.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, new_state, project_state
+                )
+
+        # These will be the same as when creating a constraint safely. I.e.,
+        # adding the index concurrently without timeouts, and using this index
+        # to create the constraint.
+        #
+        # 1. Check if the constraint already exists.
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'unique_char_field';
+            """)
+        # 2. Check the original lock_timeout value to be able to restore it
+        # later.
+        assert reverse_queries[1]["sql"] == "SHOW lock_timeout;"
+        # 3. Remove the timeout.
+        assert reverse_queries[2]["sql"] == "SET lock_timeout = '0';"
+        # 4. Verify if the index is invalid.
+        assert reverse_queries[3]["sql"] == dedent("""
+            SELECT relname
+            FROM pg_class, pg_index
+            WHERE (
+                pg_index.indisvalid = false
+                AND pg_index.indexrelid = pg_class.oid
+                AND relname = 'unique_char_field'
+            );
+            """)
+        # 5. Finally create the index concurrently.
+        assert (
+            reverse_queries[4]["sql"]
+            == 'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "unique_char_field" ON "example_app_charmodel" ("char_field")'
+        )
+        # 6. Set the timeout back to what it was originally.
+        assert reverse_queries[5]["sql"] == "SET lock_timeout = '1s';"
+
+        # 7. Add the table constraint.
+        assert (
+            reverse_queries[6]["sql"]
+            == 'ALTER TABLE "example_app_charmodel" ADD CONSTRAINT "unique_char_field" UNIQUE USING INDEX "unique_char_field"'
+        )
+        # Nothing else.
+        assert len(reverse_queries) == 7
+
+    @pytest.mark.django_db(transaction=True)
+    @override_settings(DATABASE_ROUTERS=[NeverAllow()])
+    def test_when_not_allowed_to_migrate_by_the_router(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveUniqueConstraint(
+            model_name="charmodel",
+            name="unique_char_field",
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+        # Try the same for the reverse operation:
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+    @pytest.mark.django_db(transaction=True)
+    def test_does_nothing_if_constraint_does_not_exist(self):
+        # Remove the constraint so that the migration becomes a noop.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'ALTER TABLE "example_app_charmodel"'
+                'DROP CONSTRAINT "unique_char_field";'
+            )
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveUniqueConstraint(
+            model_name="charmodel",
+            name="unique_char_field",
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # Checks if the constraint already exists.
+        assert queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'unique_char_field';
+            """)
+        assert len(queries) == 1

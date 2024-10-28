@@ -8,6 +8,12 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `SaferRemoveUniqueConstraint` operation was added. This is the complement for
+  `SaferAddUniqueConstraint` - but with the forward and backwards operations
+  swapped.
+
 ## [0.1.7] - 2024-10-09
 
 ### Fixed
