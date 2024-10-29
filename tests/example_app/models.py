@@ -40,3 +40,7 @@ class NotNullIntFieldModel(models.Model):
 
 class CharIDModel(models.Model):
     id = models.CharField(max_length=42, primary_key=True)
+
+
+class DateTimeModel(models.Model):
+    dt_field = models.DateTimeField()
