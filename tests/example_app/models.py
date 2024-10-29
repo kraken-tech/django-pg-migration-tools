@@ -13,3 +13,7 @@ class CharModel(models.Model):
         constraints = (
             models.UniqueConstraint(fields=["char_field"], name="unique_char_field"),
         )
+
+
+class DateTimeModel(models.Model):
+    dt_field = models.DateTimeField()
