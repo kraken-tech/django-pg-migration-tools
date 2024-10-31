@@ -8,12 +8,15 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.8] - 2024-10-31
+
 ### Fixed
 
-- Fixed a bug where `SaferAddUniqueConstraint` and `SaferRemoveUniqueConstraint` would
-  accept unique constraints with conditions on them, but produce invalid SQL. Unique
-  constraints with conditions are now handled as partial unique indexes, as per the
-  equivalent Django `AddConstraint` and `RemoveConstraint` operations.
+- Fixed a bug where `SaferAddUniqueConstraint` and
+  `SaferRemoveUniqueConstraint` would accept unique constraints with conditions
+  on them, but produce invalid SQL. Unique constraints with conditions are now
+  handled as partial unique indexes, as per the equivalent Django
+  `AddConstraint` and `RemoveConstraint` operations.
 
 ### Added
 
