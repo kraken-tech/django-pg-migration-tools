@@ -27,3 +27,12 @@ class AnotherCharModel(models.Model):
                 condition=models.Q(char_field__in=["c", "something"]),
             ),
         )
+
+
+class NullIntFieldModel(models.Model):
+    int_field = models.IntegerField(null=True)
+
+
+class NotNullIntFieldModel(models.Model):
+    # null=False is the default, but we set it here for clarity.
+    int_field = models.IntegerField(null=False)

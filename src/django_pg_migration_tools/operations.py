@@ -4,9 +4,12 @@ from textwrap import dedent
 
 from django.contrib.postgres import operations as psql_operations
 from django.db import migrations, models
+from django.db.backends import utils as django_backends_utils
 from django.db.backends.base import schema as base_schema
 from django.db.migrations.operations import base as base_operations
+from django.db.migrations.operations import fields as operation_fields
 from django.db.migrations.operations import models as operation_models
+from psycopg import sql as psycopg_sql
 
 
 class TimeoutQueries:
@@ -32,6 +35,61 @@ class ConstraintQueries:
         SELECT conname
         FROM pg_catalog.pg_constraint
         WHERE conname = %(constraint_name)s;
+    """)
+
+    CHECK_CONSTRAINT_IS_VALID = dedent("""
+        SELECT 1
+        FROM pg_catalog.pg_constraint
+        WHERE
+            conname = %(constraint_name)s
+            AND convalidated IS TRUE;
+    """)
+
+    CHECK_CONSTRAINT_IS_NOT_VALID = dedent("""
+        SELECT 1
+        FROM pg_catalog.pg_constraint
+        WHERE
+            conname = %(constraint_name)s
+            AND convalidated IS FALSE;
+    """)
+
+    ALTER_TABLE_CONSTRAINT_NOT_NULL_NOT_VALID = dedent("""
+        ALTER TABLE {table_name}
+        ADD CONSTRAINT {constraint_name}
+        CHECK ({column_name} IS NOT NULL) NOT VALID;
+    """)
+
+    ALTER_TABLE_DROP_CONSTRAINT = dedent("""
+        ALTER TABLE {table_name}
+        DROP CONSTRAINT {constraint_name};
+    """)
+
+    ALTER_TABLE_VALIDATE_CONSTRAINT = dedent("""
+        ALTER TABLE {table_name}
+        VALIDATE CONSTRAINT {constraint_name};
+    """)
+
+
+class NullabilityQueries:
+    IS_COLUMN_NOT_NULL = dedent("""
+        SELECT 1
+        FROM pg_catalog.pg_attribute
+        WHERE
+            attrelid = %(table_name)s::regclass
+            AND attname = %(column_name)s
+            AND attnotnull IS TRUE;
+    """)
+
+    ALTER_TABLE_SET_NOT_NULL = dedent("""
+        ALTER TABLE {table_name}
+        ALTER COLUMN {column_name}
+        SET NOT NULL;
+    """)
+
+    ALTER_TABLE_DROP_NOT_NULL = dedent("""
+        ALTER TABLE {table_name}
+        ALTER COLUMN {column_name}
+        DROP NOT NULL;
     """)
 
 
@@ -524,4 +582,265 @@ class SaferRemoveUniqueConstraint(operation_models.RemoveConstraint):
             f"it. If the migration is reversed, it will recreate the constraint "
             f"using a UNIQUE index. NOTE: Using the django_pg_migration_tools "
             f"SaferRemoveIndexConcurrently operation."
+        )
+
+
+class NullsManager(base_operations.Operation):
+    def set_not_null(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        model: type[models.Model],
+        column_name: str,
+    ) -> None:
+        """
+        Set column_name to NOT NULL without blocking reads/writes for too long.
+
+        On a high-level, this routine will:
+
+        1. Add a NOT NULL check constraint that's initially NOT VALID.
+        2. Validate that constraint.
+        3. Set NOT NULL on the column. Note: Postgres will internally use the
+           constraint above instead of performing a table scan.
+        4. Drop the constraint.
+
+        The following routine takes into consideration:
+
+        Reentrancy:
+          Any of the given operations below may fail for a variety of
+          reasons. If a failure occurs, this routine can be rerun without
+          impacting correct execution. Each step progresses toward the
+          outcome while leaving the db in a consistent state.
+          If the operation fails mid-way through, it can still be picked up
+          again. The database isn't left in an inconsistent state.
+
+        Idempotency:
+          The code expects clients to retry migrations without extra
+          side-effects. So does this routine. Multiple calls to the
+          routine have the same effect on the system state as a single
+          call.
+
+        Small number of introspective SQL queries:
+          Introspective SQL queries are necessary for checking the state of
+          the database. This is required for idempotency and reentrancy. At
+          each step, the routine only fires as few introspective SQL
+          statements as necessary.
+        """
+        psql_operations.NotInTransactionMixin()._ensure_not_in_transaction(
+            schema_editor
+        )
+        if not self.allow_migrate_model(schema_editor.connection.alias, model):
+            return
+
+        table_name = model._meta.db_table
+        constraint_name = self._get_constraint_name(table_name, column_name)
+
+        is_not_null = self._is_not_null(schema_editor, table_name, column_name)
+        constraint_exists = self._constraint_exists(schema_editor, constraint_name)
+        if is_not_null and (not constraint_exists):
+            return
+
+        if not constraint_exists:
+            self._alter_table_not_null_not_valid_constraint(
+                schema_editor, table_name, column_name, constraint_name
+            )
+            self._validate_constraint(schema_editor, table_name, constraint_name)
+            self._alter_table_not_null(schema_editor, table_name, column_name)
+            self._alter_table_drop_constraint(
+                schema_editor, table_name, constraint_name
+            )
+            return
+        elif self._is_constraint_valid(schema_editor, constraint_name):
+            if not is_not_null:
+                self._alter_table_not_null(schema_editor, table_name, column_name)
+            self._alter_table_drop_constraint(
+                schema_editor, table_name, constraint_name
+            )
+            return
+        else:
+            # Constraint exists and is NOT VALID.
+            self._validate_constraint(schema_editor, table_name, constraint_name)
+            self._alter_table_not_null(schema_editor, table_name, column_name)
+            self._alter_table_drop_constraint(
+                schema_editor, table_name, constraint_name
+            )
+            return
+
+    def set_null(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        model: type[models.Model],
+        column_name: str,
+    ) -> None:
+        psql_operations.NotInTransactionMixin()._ensure_not_in_transaction(
+            schema_editor
+        )
+        if not self.allow_migrate_model(schema_editor.connection.alias, model):
+            return
+
+        table_name = model._meta.db_table
+        if not self._is_not_null(schema_editor, table_name, column_name):
+            return
+        self._alter_table_drop_not_null(schema_editor, table_name, column_name)
+
+    def _alter_table_not_null_not_valid_constraint(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        table_name: str,
+        column_name: str,
+        constraint_name: str,
+    ) -> None:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(
+                ConstraintQueries.ALTER_TABLE_CONSTRAINT_NOT_NULL_NOT_VALID
+            ).format(
+                table_name=psycopg_sql.Identifier(table_name),
+                column_name=psycopg_sql.Identifier(column_name),
+                constraint_name=psycopg_sql.Identifier(constraint_name),
+            )
+        )
+
+    def _is_not_null(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        table_name: str,
+        column_name: str,
+    ) -> bool:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            NullabilityQueries.IS_COLUMN_NOT_NULL,
+            {"table_name": table_name, "column_name": column_name},
+        )
+        return bool(cursor.fetchone())
+
+    def _get_constraint_name(self, table_name: str, column_name: str) -> str:
+        """
+        We need a unique name for the constraint.
+        We don't care too much about what the name itself turns out to be. This
+        constraint will be deleted at the end of the process anyway.
+        Here we just give it some resemblance to the table and column names the
+        constraint was created from.
+        """
+        suffix: str = django_backends_utils.names_digest(  # type:ignore[attr-defined]
+            table_name, column_name, length=10
+        )
+        return f"{table_name[:10]}_{column_name[:10]}_{suffix}"
+
+    def _is_constraint_valid(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        constraint_name: str,
+    ) -> bool:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            ConstraintQueries.CHECK_CONSTRAINT_IS_VALID,
+            {"constraint_name": constraint_name},
+        )
+        return bool(cursor.fetchone())
+
+    def _alter_table_not_null(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        table_name: str,
+        column_name: str,
+    ) -> None:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(NullabilityQueries.ALTER_TABLE_SET_NOT_NULL).format(
+                table_name=psycopg_sql.Identifier(table_name),
+                column_name=psycopg_sql.Identifier(column_name),
+            ),
+        )
+
+    def _alter_table_drop_not_null(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        table_name: str,
+        column_name: str,
+    ) -> None:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(NullabilityQueries.ALTER_TABLE_DROP_NOT_NULL).format(
+                table_name=psycopg_sql.Identifier(table_name),
+                column_name=psycopg_sql.Identifier(column_name),
+            ),
+        )
+
+    def _alter_table_drop_constraint(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        table_name: str,
+        constraint_name: str,
+    ) -> None:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_DROP_CONSTRAINT).format(
+                table_name=psycopg_sql.Identifier(table_name),
+                constraint_name=psycopg_sql.Identifier(constraint_name),
+            )
+        )
+
+    def _constraint_exists(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        constraint_name: str,
+    ) -> bool:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
+            {"constraint_name": constraint_name},
+        )
+        return bool(cursor.fetchone())
+
+    def _validate_constraint(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        table_name: str,
+        constraint_name: str,
+    ) -> None:
+        cursor = schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT).format(
+                table_name=psycopg_sql.Identifier(table_name),
+                constraint_name=psycopg_sql.Identifier(constraint_name),
+            )
+        )
+
+
+class SaferAlterFieldSetNotNull(operation_fields.AlterField):
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        NullsManager().set_not_null(
+            app_label,
+            schema_editor,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            column_name=self.name,
+        )
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        NullsManager().set_null(
+            app_label,
+            schema_editor,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            column_name=self.name,
+        )
+
+    def describe(self) -> str:
+        base = super().describe()
+        return (
+            f"{base}. Note: Using django_pg_migration_tools "
+            f"SaferAlterFieldSetNotNull operation."
         )
