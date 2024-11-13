@@ -8,6 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- The `SaferAlterFieldSetNotNull` operation was added. This will more safely
+  change a field from nullable to not nullable.
+
 ## [0.1.8] - 2024-10-31
 
 ### Fixed

@@ -5,6 +5,7 @@ import pytest
 from django.db import (
     NotSupportedError,
     connection,
+    models,
 )
 from django.db.migrations.state import (
     ModelState,
@@ -14,7 +15,13 @@ from django.db.models import CheckConstraint, Index, Q, UniqueConstraint
 from django.test import override_settings, utils
 
 from django_pg_migration_tools import operations
-from tests.example_app.models import AnotherCharModel, CharModel, IntModel
+from tests.example_app.models import (
+    AnotherCharModel,
+    CharModel,
+    IntModel,
+    NotNullIntFieldModel,
+    NullIntFieldModel,
+)
 
 
 _CHECK_INDEX_EXISTS_QUERY = """
@@ -1351,3 +1358,347 @@ class TestSaferRemoveUniqueConstraint:
             WHERE conname = 'unique_char_field';
             """)
         assert len(queries) == 1
+
+
+class TestSaferAlterFieldSetNotNull:
+    app_label = "example_app"
+
+    @pytest.mark.django_db
+    def test_requires_atomic_false(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="nullintfieldmodel",
+            name="int_field",
+            field=models.IntegerField(null=False),
+        )
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+    @pytest.mark.django_db(transaction=True)
+    @override_settings(DATABASE_ROUTERS=[NeverAllow()])
+    def test_when_not_allowed_to_migrate_by_the_router(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="nullintfieldmodel",
+            name="int_field",
+            field=models.IntegerField(null=False),
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+        # Try the same for the reverse operation:
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+    @pytest.mark.django_db(transaction=True)
+    def test_operation(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="nullintfieldmodel",
+            name="int_field",
+            field=models.IntegerField(null=False),
+        )
+
+        assert operation.describe() == (
+            "Alter field int_field on nullintfieldmodel. Note: Using "
+            "django_pg_migration_tools SaferAlterFieldSetNotNull operation."
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(queries) == 6
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullintfieldmodel'::regclass
+                AND attname = 'int_field'
+                AND attnotnull IS TRUE;
+        """)
+        assert queries[1]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'example_ap_int_field_59f69830a8';
+        """)
+        assert queries[2]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            ADD CONSTRAINT "example_ap_int_field_59f69830a8"
+            CHECK ("int_field" IS NOT NULL) NOT VALID;
+        """)
+        assert queries[3]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            VALIDATE CONSTRAINT "example_ap_int_field_59f69830a8";
+        """)
+        assert queries[4]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            ALTER COLUMN "int_field"
+            SET NOT NULL;
+        """)
+        assert queries[5]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            DROP CONSTRAINT "example_ap_int_field_59f69830a8";
+        """)
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(reverse_queries) == 2
+
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullintfieldmodel'::regclass
+                AND attname = 'int_field'
+                AND attnotnull IS TRUE;
+        """)
+        assert reverse_queries[1]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            ALTER COLUMN "int_field"
+            DROP NOT NULL;
+        """)
+
+        # Reversing again does nothing apart from checking the field is already
+        # nullable.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(second_reverse_queries) == 1
+
+        assert second_reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullintfieldmodel'::regclass
+                AND attname = 'int_field'
+                AND attnotnull IS TRUE;
+        """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_field_is_already_not_nullable(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NotNullIntFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="notnullintfieldmodel",
+            name="int_field",
+            field=models.IntegerField(null=False),
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(queries) == 2
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_notnullintfieldmodel'::regclass
+                AND attname = 'int_field'
+                AND attnotnull IS TRUE;
+        """)
+        assert queries[1]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'example_ap_int_field_147755c69b';
+        """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_valid_constraint_already_exists(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="nullintfieldmodel",
+            name="int_field",
+            field=models.IntegerField(null=False),
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "ALTER TABLE example_app_nullintfieldmodel "
+                "ADD CONSTRAINT example_ap_int_field_59f69830a8 "
+                "CHECK (int_field IS NOT NULL);"
+            )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(queries) == 5
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullintfieldmodel'::regclass
+                AND attname = 'int_field'
+                AND attnotnull IS TRUE;
+        """)
+        assert queries[1]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'example_ap_int_field_59f69830a8';
+        """)
+        assert queries[2]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_constraint
+            WHERE
+                conname = 'example_ap_int_field_59f69830a8'
+                AND convalidated IS TRUE;
+        """)
+        assert queries[3]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            ALTER COLUMN "int_field"
+            SET NOT NULL;
+        """)
+        assert queries[4]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            DROP CONSTRAINT "example_ap_int_field_59f69830a8";
+        """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_not_valid_constraint_already_exists(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="nullintfieldmodel",
+            name="int_field",
+            field=models.IntegerField(null=False),
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "ALTER TABLE example_app_nullintfieldmodel "
+                "ADD CONSTRAINT example_ap_int_field_59f69830a8 "
+                "CHECK (int_field IS NOT NULL) NOT VALID;"
+            )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(queries) == 6
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullintfieldmodel'::regclass
+                AND attname = 'int_field'
+                AND attnotnull IS TRUE;
+        """)
+        assert queries[1]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'example_ap_int_field_59f69830a8';
+        """)
+        assert queries[2]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_constraint
+            WHERE
+                conname = 'example_ap_int_field_59f69830a8'
+                AND convalidated IS TRUE;
+        """)
+        assert queries[3]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            VALIDATE CONSTRAINT "example_ap_int_field_59f69830a8";
+        """)
+        assert queries[4]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            ALTER COLUMN "int_field"
+            SET NOT NULL;
+        """)
+        assert queries[5]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            DROP CONSTRAINT "example_ap_int_field_59f69830a8";
+        """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_valid_constraint_and_alter_table_already_performed(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="nullintfieldmodel",
+            name="int_field",
+            field=models.IntegerField(null=False),
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "ALTER TABLE example_app_nullintfieldmodel "
+                "ADD CONSTRAINT example_ap_int_field_59f69830a8 "
+                "CHECK (int_field IS NOT NULL);"
+            )
+            cursor.execute(
+                "ALTER TABLE example_app_nullintfieldmodel "
+                "ALTER COLUMN int_field "
+                "SET NOT NULL;"
+            )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(queries) == 4
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullintfieldmodel'::regclass
+                AND attname = 'int_field'
+                AND attnotnull IS TRUE;
+        """)
+        assert queries[1]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'example_ap_int_field_59f69830a8';
+        """)
+        assert queries[2]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_constraint
+            WHERE
+                conname = 'example_ap_int_field_59f69830a8'
+                AND convalidated IS TRUE;
+        """)
+        assert queries[3]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullintfieldmodel"
+            DROP CONSTRAINT "example_ap_int_field_59f69830a8";
+        """)
