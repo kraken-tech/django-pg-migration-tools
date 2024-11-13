@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.9] - 2024-11-14
+
 ### Added
 
 - The `SaferAlterFieldSetNotNull` operation was added. This will more safely
