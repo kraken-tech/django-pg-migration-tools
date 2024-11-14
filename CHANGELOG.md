@@ -8,6 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Updated
+
+- The `migrate_with_timeouts` callback argument `RetryState` now includes the
+  name of the database that the retry being performed is associated with.
+
 ## [0.1.9] - 2024-11-14
 
 ### Added
