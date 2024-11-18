@@ -50,16 +50,20 @@ docs = "https://django-pg-migration-tools.readthedocs.io/"
 [project.optional-dependencies]
 # Used for running the test matrix via `nox` locally or by remote checks.
 # Also reused in the `dev` dependencies list.
-pytest-in-nox = [
+pytest-in-nox-base = [
     "coverage>=7.6.1",
     "dj-database-url>=2.1.0",
     "django-stubs>=5.0.0",
     "environs>=11.0.0",
     "nox>=2024.4.15",
-    "psycopg[binary]>=3.1.18",
     "pytest-django>=4.8.0",
     "pytest>=8.2.0",
 ]
+pytest-in-nox-psycopg3 = [
+    "django_pg_migration_tools[pytest-in-nox-base]",
+    "psycopg[binary]>=3.1.18",
+]
+
 docs = [
   "sphinx>=7.4.7",
   "sphinx_rtd_theme>=2.0.0",
@@ -67,7 +71,7 @@ docs = [
 ]
 dev = [
     # Testing
-    "django_pg_migration_tools[pytest-in-nox]",
+    "django_pg_migration_tools[pytest-in-nox-psycopg3]",
     "django_pg_migration_tools[docs]",
     "django>=4.2.0",  # Django is needed for `make test`, but not for `nox`.
 

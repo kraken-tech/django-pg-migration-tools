@@ -65,7 +65,7 @@ def tests(session: nox.Session, package_constraint: str) -> None:
             "--quiet",
             "--resolver=backtracking",
             "--strip-extras",
-            "--extra=pytest-in-nox",
+            "--extra=pytest-in-nox-psycopg3",
             "pyproject.toml",
             "--constraint",
             constraints_file.name,
