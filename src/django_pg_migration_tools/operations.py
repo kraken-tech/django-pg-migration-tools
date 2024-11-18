@@ -9,7 +9,15 @@ from django.db.backends.base import schema as base_schema
 from django.db.migrations.operations import base as base_operations
 from django.db.migrations.operations import fields as operation_fields
 from django.db.migrations.operations import models as operation_models
-from psycopg import sql as psycopg_sql
+
+
+try:
+    from psycopg import sql as psycopg_sql
+except ImportError:  # pragma: no cover
+    try:
+        from psycopg2 import sql as psycopg_sql  # type: ignore[no-redef]
+    except ImportError:
+        raise ImportError("Neither psycopg2 nor psycopg (3) is installed.")
 
 
 class TimeoutQueries:

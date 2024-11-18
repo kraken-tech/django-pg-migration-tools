@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 - The `migrate_with_timeouts` callback argument `RetryState` now includes the
   name of the database that the retry being performed is associated with.
 
+### Fixed
+
+- Fixed an import error introduced on v0.1.9 that would break that version for
+  users of psycopg2.
+
 ## [0.1.9] - 2024-11-14
 
 ### Added
