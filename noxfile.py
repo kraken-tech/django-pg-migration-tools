@@ -73,9 +73,16 @@ def tests(session: nox.Session, package_constraint: str) -> None:
             lock_file.name,
         )
 
-        # Install the dependencies from the newly compiled lockfile and main
-        # package.
-        session.install("-r", lock_file.name, ".")
+        # We have to open the file again since after `session.run` is
+        # called, a `lock_file.write()` call won't write to the file anymore.
+        with open(lock_file.name, "a") as f:
+            # Add this project dependency to the lock file.
+            f.write(".\n")
+
+        # Use `uv sync` so that all packages that aren't included in the
+        # dependency file are removed beforehand. This allow us to not end up
+        # with two versions of a varying library (psycopg, for example).
+        session.run("uv", "pip", "sync", lock_file.name)
 
     # Add the project directory to the PYTHONPATH for running the test Django
     # project.
