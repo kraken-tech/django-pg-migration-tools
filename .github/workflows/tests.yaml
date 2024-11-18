@@ -55,8 +55,7 @@ jobs:
       - name: Install requirements
         run: |
           source .venv/bin/activate
-          pip install uv==0.1.40
-          uv pip install --requirement requirements/pytest-in-nox.txt
+          pip install uv==0.1.40 nox==2024.10.9
 
       - name: Run the tests
         run: |
