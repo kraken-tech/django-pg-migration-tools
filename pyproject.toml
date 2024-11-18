@@ -56,7 +56,6 @@ pytest-in-nox = [
     "django-stubs>=5.0.0",
     "environs>=11.0.0",
     "nox>=2024.4.15",
-    "psycopg2-binary>=2.9.9",
     "psycopg[binary]>=3.1.18",
     "pytest-django>=4.8.0",
     "pytest>=8.2.0",
