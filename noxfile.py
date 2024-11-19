@@ -31,6 +31,13 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
 
 @nox.session()
 @nox.parametrize(
+    "dependency_file",
+    [
+        nox.param("pytest-in-nox-psycopg3", id="psycopg3"),
+        nox.param("pytest-in-nox-psycopg2", id="psycopg2"),
+    ],
+)
+@nox.parametrize(
     "package_constraint",
     [
         nox.param("django>=4.2,<4.3", id="django=4.2.X"),
@@ -45,7 +52,7 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
         nox.param("3.12", id="python=3.12"),
     ],
 )
-def tests(session: nox.Session, package_constraint: str) -> None:
+def tests(session: nox.Session, package_constraint: str, dependency_file: str) -> None:
     """
     Run the test suite.
     """
@@ -65,7 +72,7 @@ def tests(session: nox.Session, package_constraint: str) -> None:
             "--quiet",
             "--resolver=backtracking",
             "--strip-extras",
-            "--extra=pytest-in-nox-psycopg3",
+            f"--extra={dependency_file}",
             "pyproject.toml",
             "--constraint",
             constraints_file.name,

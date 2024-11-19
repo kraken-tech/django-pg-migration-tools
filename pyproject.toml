@@ -63,7 +63,10 @@ pytest-in-nox-psycopg3 = [
     "django_pg_migration_tools[pytest-in-nox-base]",
     "psycopg[binary]>=3.1.18",
 ]
-
+pytest-in-nox-psycopg2 = [
+    "django_pg_migration_tools[pytest-in-nox-base]",
+    "psycopg2-binary>=2.9.9",
+]
 docs = [
   "sphinx>=7.4.7",
   "sphinx_rtd_theme>=2.0.0",
@@ -79,6 +82,7 @@ dev = [
     "ruff>=0.5.2",
     "mypy>=1.10.1",
     "pre-commit>=3.7.1",
+    "types-psycopg2>=2.9.21.20241019",
 
     # Packaging
     "build>=1.2.1",

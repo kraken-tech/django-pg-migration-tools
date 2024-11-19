@@ -132,6 +132,8 @@ sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 sqlparse==0.5.2
     # via django
+types-psycopg2==2.9.21.20241019
+    # via django-pg-migration-tools (pyproject.toml)
 types-pyyaml==6.0.12.20240917
     # via django-stubs
 typing-extensions==4.12.2
