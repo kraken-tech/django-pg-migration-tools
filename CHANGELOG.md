@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.10] - 2024-11-22
+
 ### Updated
 
 - The `migrate_with_timeouts` callback argument `RetryState` now includes the

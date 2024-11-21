@@ -40,7 +40,7 @@ docutils==0.21.2
     # via
     #   sphinx
     #   sphinx-rtd-theme
-environs==11.2.0
+environs==11.2.1
     # via django-pg-migration-tools (pyproject.toml)
 filelock==3.16.1
     # via virtualenv
