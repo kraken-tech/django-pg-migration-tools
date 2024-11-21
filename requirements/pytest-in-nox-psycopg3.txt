@@ -23,7 +23,7 @@ django-stubs==5.1.1
     # via django-pg-migration-tools (pyproject.toml)
 django-stubs-ext==5.1.1
     # via django-stubs
-environs==11.2.0
+environs==11.2.1
     # via django-pg-migration-tools (pyproject.toml)
 filelock==3.16.1
     # via virtualenv
