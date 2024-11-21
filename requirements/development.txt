@@ -20,7 +20,7 @@ charset-normalizer==3.4.0
     # via requests
 colorlog==6.9.0
     # via nox
-coverage==7.6.4
+coverage==7.6.7
     # via django-pg-migration-tools (pyproject.toml)
 distlib==0.3.9
     # via virtualenv
@@ -40,7 +40,7 @@ docutils==0.21.2
     # via
     #   sphinx
     #   sphinx-rtd-theme
-environs==11.1.0
+environs==11.2.0
     # via django-pg-migration-tools (pyproject.toml)
 filelock==3.16.1
     # via virtualenv
@@ -85,8 +85,6 @@ psycopg==3.2.3
     # via django-pg-migration-tools (pyproject.toml)
 psycopg-binary==3.2.3
     # via psycopg
-psycopg2-binary==2.9.10
-    # via django-pg-migration-tools (pyproject.toml)
 pygments==2.18.0
     # via sphinx
 pyproject-hooks==1.2.0
@@ -105,7 +103,7 @@ regex==2024.11.6
     # via sphinx-lint
 requests==2.32.3
     # via sphinx
-ruff==0.7.3
+ruff==0.7.4
     # via django-pg-migration-tools (pyproject.toml)
 snowballstemmer==2.2.0
     # via sphinx
@@ -132,8 +130,10 @@ sphinxcontrib-qthelp==2.0.0
     # via sphinx
 sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
-sqlparse==0.5.1
+sqlparse==0.5.2
     # via django
+types-psycopg2==2.9.21.20241019
+    # via django-pg-migration-tools (pyproject.toml)
 types-pyyaml==6.0.12.20240917
     # via django-stubs
 typing-extensions==4.12.2

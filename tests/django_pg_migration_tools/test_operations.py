@@ -11,7 +11,7 @@ from django.db.migrations.state import (
     ModelState,
     ProjectState,
 )
-from django.db.models import CheckConstraint, Index, Q, UniqueConstraint
+from django.db.models import BaseConstraint, Index, Q, UniqueConstraint
 from django.test import override_settings, utils
 
 from django_pg_migration_tools import operations
@@ -923,11 +923,12 @@ class TestSaferAddUniqueConstraint:
         with pytest.raises(ValueError):
             operations.SaferAddUniqueConstraint(
                 model_name="intmodel",
-                # This isn't a valid class! There will be a type error here,
-                # but we want to cover for people not using types as well.
-                constraint=CheckConstraint(  # type: ignore[arg-type]
+                # This isn't a valid class! There will be a type error here.
+                # If the user is using type annotations they will realise the
+                # mistake when running mypy. But if not, they will see the
+                # exception at runtime.
+                constraint=BaseConstraint(  # type: ignore[arg-type]
                     name="test_check_constraint",
-                    condition=Q(),
                 ),
             )
 

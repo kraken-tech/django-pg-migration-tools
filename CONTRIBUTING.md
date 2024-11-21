@@ -126,10 +126,9 @@ To update the pinned versions of all packages simply run:
 make update
 ```
 
-This will update the pinned versions of every package in the
-`requirements/development.txt` and `requirements/pytest-in-nox` (required for
-CI) lock files to the latest version which is compatible with the constraints
-in `pyproject.toml`.
+This will update the pinned versions of every development, test, and docs lock
+files to the latest version which is compatible with the constraints in
+`pyproject.toml`.
 
 You can then run:
 

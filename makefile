@@ -76,7 +76,8 @@ format:
 .PHONY:update
 update:
 	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=dev --output-file=requirements/development.txt
-	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=pytest-in-nox --output-file=requirements/pytest-in-nox.txt
+	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=pytest-in-nox-psycopg3 --output-file=requirements/pytest-in-nox-psycopg3.txt
+	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=pytest-in-nox-psycopg2 --output-file=requirements/pytest-in-nox-psycopg2.txt
 	uv pip compile pyproject.toml -q --upgrade --resolver=backtracking --extra=docs --output-file=requirements/docs.txt
 
 .PHONY:docs
