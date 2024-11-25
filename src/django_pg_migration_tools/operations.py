@@ -141,6 +141,39 @@ def build_postgres_identifier(items: list[str], suffix: str) -> str:
     return f"{chopped_name}_{hash_val}_{suffix}"
 
 
+class IndexSQLBuilder:
+    """
+    An index builder class that does not take into consideration the Django
+    application state.
+
+    This class method names follow after models.Index to avoid name
+    sprawling.
+    """
+
+    def __init__(self, table_name: str, model_name: str, column_name: str) -> None:
+        self.table_name = table_name
+        self.model_name = model_name
+        self.column_name = column_name
+
+    def create_sql(self, unique: bool = False) -> str:
+        if unique:
+            base = "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS"
+        else:
+            base = "CREATE INDEX CONCURRENTLY IF NOT EXISTS"
+        return (
+            f'{base} "{self.name}" ON "{self.table_name}" ("{self.column_name}");'
+        )
+
+    def remove_sql(self) -> str:
+        return f'DROP INDEX CONCURRENTLY IF EXISTS "{self.name}";'
+
+    @property
+    def name(self) -> str:
+        return build_postgres_identifier(
+            [self.model_name, self.column_name], suffix="idx"
+        )
+
+
 class SafeIndexOperationManager(
     psql_operations.NotInTransactionMixin,
     base_operations.Operation,

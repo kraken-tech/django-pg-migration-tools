@@ -1379,6 +1379,40 @@ class TestSaferRemoveUniqueConstraint:
         assert len(queries) == 1
 
 
+class TestIndexSQLBuilder:
+    def test_create_index(self):
+        idx_builder = operations.IndexSQLBuilder(
+            model_name="mymodel",
+            table_name="mytable",
+            column_name="mycolumn",
+        )
+        assert idx_builder.create_sql() == (
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
+            '"mymodel_mycolumn_idx" ON "mytable" ("mycolumn");'
+        )
+
+    def test_create_unique_index(self):
+        idx_builder = operations.IndexSQLBuilder(
+            model_name="mymodel",
+            table_name="mytable",
+            column_name="mycolumn",
+        )
+        assert idx_builder.create_sql(unique=True) == (
+            "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "
+            '"mymodel_mycolumn_idx" ON "mytable" ("mycolumn");'
+        )
+
+    def test_drop_index(self):
+        idx_builder = operations.IndexSQLBuilder(
+            model_name="mymodel",
+            table_name="mytable",
+            column_name="mycolumn",
+        )
+        assert idx_builder.remove_sql() == (
+            'DROP INDEX CONCURRENTLY IF EXISTS "mymodel_mycolumn_idx";'
+        )
+
+
 class TestSaferAlterFieldSetNotNull:
     app_label = "example_app"
 
