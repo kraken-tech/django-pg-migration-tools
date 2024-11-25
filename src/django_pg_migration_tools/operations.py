@@ -184,7 +184,7 @@ class SafeIndexOperationManager(
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
-        index: models.Index,
+        index: models.Index | IndexSQLBuilder,
         unique: bool,
         model: type[models.Model],
     ) -> None:
@@ -196,16 +196,14 @@ class SafeIndexOperationManager(
         original_lock_timeout = self._show_lock_timeout(schema_editor)
         self._set_lock_timeout(schema_editor, "0")
 
-        self._ensure_not_an_invalid_index(schema_editor, index)
-        index_sql = str(index.create_sql(model, schema_editor, concurrently=True))
-        # Inject the IF NOT EXISTS because Django doesn't provide a handy
-        # if_not_exists: bool parameter for us to use.
-        index_sql = index_sql.replace(
-            "CREATE INDEX CONCURRENTLY", "CREATE INDEX CONCURRENTLY IF NOT EXISTS"
-        )
-        if unique:
-            index_sql = index_sql.replace("CREATE INDEX", "CREATE UNIQUE INDEX")
+        self._ensure_not_an_invalid_index(schema_editor, index.name)
 
+        index_sql = self._get_create_index_sql(
+            unique=unique,
+            model=model,
+            schema_editor=schema_editor,
+            index=index,
+        )
         schema_editor.execute(index_sql)
 
         self._set_lock_timeout(schema_editor, original_lock_timeout)
@@ -227,10 +225,10 @@ class SafeIndexOperationManager(
         original_lock_timeout = self._show_lock_timeout(schema_editor)
         self._set_lock_timeout(schema_editor, "0")
 
-        index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         # Differently from the CREATE INDEX operation, Django already provides
         # us with IF EXISTS when dropping an index... We don't have to do that
         # .replace() call here.
+        index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         schema_editor.execute(index_sql)
 
         self._set_lock_timeout(schema_editor, original_lock_timeout)
@@ -254,7 +252,7 @@ class SafeIndexOperationManager(
     def _ensure_not_an_invalid_index(
         self,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
-        index: models.Index,
+        index_name: str,
     ) -> None:
         """
         It is possible that the migration would have failed when:
@@ -272,9 +270,31 @@ class SafeIndexOperationManager(
         be recreated on next steps via CREATE INDEX CONCURRENTLY IF EXISTS.
         """
         cursor = schema_editor.connection.cursor()
-        cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index.name})
+        cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index_name})
         if cursor.fetchone():
-            cursor.execute(IndexQueries.DROP_INDEX.format(index.name))
+            cursor.execute(IndexQueries.DROP_INDEX.format(index_name))
+
+    def _get_create_index_sql(
+        self,
+        unique: bool,
+        model: type[models.Model],
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        index: models.Index | IndexSQLBuilder,
+    ) -> str:
+        if isinstance(index, IndexSQLBuilder):
+            assert model._meta.db_table == index.table_name
+            return index.create_sql(unique=unique)
+
+        index_sql = str(index.create_sql(model, schema_editor, concurrently=True))
+        # Inject the IF NOT EXISTS because Django doesn't provide a handy
+        # if_not_exists: bool parameter for us to use.
+        index_sql = index_sql.replace(
+            "CREATE INDEX CONCURRENTLY", "CREATE INDEX CONCURRENTLY IF NOT EXISTS"
+        )
+        if unique:
+            index_sql = index_sql.replace("CREATE INDEX", "CREATE UNIQUE INDEX")
+
+        return index_sql
 
 
 class ConstraintOperationError(Exception):
