@@ -142,11 +142,11 @@ class TestMigrateWithTimeoutsCommand:
             )
 
     def test_invalid_callback_path(self):
-        with pytest.raises(ModuleNotFoundError, match="No module named 'this.path'"):
+        with pytest.raises(ModuleNotFoundError, match="No module named 'some'"):
             management.call_command(
                 "migrate_with_timeouts",
                 lock_timeout_in_ms=50_000,
-                retry_callback_path="this.path.does.not.exist",
+                retry_callback_path="some.path.that.does.not.exist",
             )
 
     @pytest.mark.django_db(transaction=True)
