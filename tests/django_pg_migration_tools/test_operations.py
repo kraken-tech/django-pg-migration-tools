@@ -1044,6 +1044,24 @@ class TestSaferAddUniqueConstraint:
             assert not cursor.fetchone()
 
 
+class TestBuildPostgresIdentifier:
+    def test_happy_path(self):
+        assert (
+            operations.build_postgres_identifier(
+                items=["item1", "item2"], suffix="suffix"
+            )
+            == "item1_item2_suffix"
+        )
+
+    def test_longer_than_63_char(self):
+        assert (
+            operations.build_postgres_identifier(
+                items=["a" * 32, "b" * 32], suffix="suffix"
+            )
+            == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_bbbbbbbbbbbbbb_bbeb3ff7_suffix"
+        )
+
+
 class TestSaferRemoveUniqueConstraint:
     app_label = "example_app"
 

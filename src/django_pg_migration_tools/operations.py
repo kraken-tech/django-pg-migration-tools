@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from textwrap import dedent
 
 from django.contrib.postgres import operations as psql_operations
@@ -10,6 +11,8 @@ from django.db.migrations.operations import base as base_operations
 from django.db.migrations.operations import fields as operation_fields
 from django.db.migrations.operations import models as operation_models
 
+
+MAX_POSTGRES_IDENTIFIER_LEN = 63
 
 try:
     from psycopg import sql as psycopg_sql
@@ -99,6 +102,43 @@ class NullabilityQueries:
         ALTER COLUMN {column_name}
         DROP NOT NULL;
     """)
+
+
+def build_postgres_identifier(items: list[str], suffix: str) -> str:
+    """
+    Build the name for a valid postgres identifier based on the items
+
+    Example:
+        build_postgres_identifier(["table_name", "column_name"], "idx")
+    Returns:
+        "table_name_column_name_idx"
+
+    If the string is too long, it will be chopped so that a summarising hash is
+    added. The suffix is preserved:
+
+    Example:
+        build_postgres_identifier(
+            ["this_string_containsss_32_chars!", "this_string_containsss_32_chars!"],
+            "suffix"
+        )
+    Returns:
+        this_string_containsss_32_chars!_this_string_co_e9493e80_suffix
+    """
+    base_name = "_".join(items + [suffix])
+    if len(base_name) <= MAX_POSTGRES_IDENTIFIER_LEN:
+        return base_name
+
+    hash_len = 8
+    hash_obj = hashlib.md5(base_name.encode())
+    hash_val = hash_obj.hexdigest()[:hash_len]
+
+    chop_threshold = (
+        MAX_POSTGRES_IDENTIFIER_LEN
+        # Includes two "_" chars.
+        - (len(suffix) + hash_len + 2)
+    )
+    chopped_name = base_name[:chop_threshold]
+    return f"{chopped_name}_{hash_val}_{suffix}"
 
 
 class SafeIndexOperationManager(
