@@ -398,7 +398,7 @@ Class Definitions
           ]
 
 
-.. py:class:: SaferAlterFieldSetNotNull(model_name: str, name: str)
+.. py:class:: SaferAlterFieldSetNotNull(model_name: str, name: str, field: models.Field)
 
     Provides a safer way to alter a field to NOT NULL.
 
