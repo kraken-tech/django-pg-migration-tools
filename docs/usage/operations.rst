@@ -502,3 +502,122 @@ Class Definitions
                   field=models.IntegerField()
               ),
           ]
+
+.. py:class:: SaferAddFieldForeignKey(model_name: str, name: str, field: models.ForeignKey)
+
+    Provides a safer way to add a foreign key field to an existing model
+
+    :param model_name: Model name in lowercase without underscores.
+    :type model_name: str
+    :param name: The column name to be set as not null.
+    :type name: str
+    :param field: The foreign key field that is being added.
+    :type field: models.ForeignKey
+
+    **Why use this SaferAddFieldForeignKey operation?**
+    ---------------------------------------------------
+
+    When using Django's default ``AddField`` operation, the SQL created has the
+    following form:
+
+    .. code-block:: sql
+
+      ALTER TABLE "foo" ADD COLUMN "bar_id" bigint NULL
+      REFERENCES "bar" ("id") DEFERRABLE INITIALLY DEFERRED;
+
+      -- optional: if the field doesn't set index=False
+      CREATE INDEX "foo_bar_idx" ON "foo" ("bar_id");
+
+    There are two problems:
+
+    1. The ``ALTER TABLE`` command takes an AccessExclusive lock, which is the
+       highest level of locking. It will block reads and writes on both
+       tables.
+    2. The ``CREATE INDEX`` takes a Share lock which will conflict with
+       inserts, updates, and deletes on the table.
+
+    The below are the queries executed by this operation in order to avoid the
+    two problems above:
+
+    .. code-block:: sql
+
+      -- This operation takes an ACCESS EXCLUSIVE LOCK, but for a very short
+      -- duration. Adding a nullable field in Postgres doesn't require a full
+      -- table scan starting on version 11.
+      ALTER TABLE "foo" ADD COLUMN "bar_id" bigint NULL;
+
+      -- This operation takes an ShareUpdateExclusiveLock. It won't block
+      -- reads or writes on the table.
+      -- [Optional depending on db_index=True]
+      SET lock_timeout TO '0';
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS bar_id_idx ON foo (bar_id);
+      SET lock_timeout TO '10s';
+
+      -- This operation will take a ShareRowExclusive lock on **both** the foo
+      -- table and the bar table. This will not block reads, but it
+      -- will block insert, updates, and deletes. This will only happen for a
+      -- short time, as this operation won't need to scan the whole table.
+      ALTER TABLE foo
+      ADD CONSTRAINT fk_post_bar FOREIGN KEY (bar_id)
+      REFERENCES bar (id)
+      DEFERRABLE INITIALLY DEFERRED
+      NOT VALID;
+
+      -- This query will take a ShareUpdateExclusive lock on the foo table does
+      -- not block reads nor writes), and a RowShare lock on the bar table
+      -- (does not block reads nor writes).
+      ALTER TABLE foo VALIDATE CONSTRAINT fk_post_bar;
+
+    **NOTE**: Additional queries that are triggered by this operation to
+    guarantee idempotency have been omitted from the snippet above. The key
+    take away is that if this migration fails, it can be attempted again and it
+    will pick up from where it has left (reentrancy).
+
+    **NOTE 2**: If you want to add a ``NOT NULL`` constraint after you have
+    backfilled the table, you can use the ``SaferAlterFieldSetNotNull``
+    operation.
+
+    How to use
+    ----------
+
+    1. Add a new ForeignKey field to your model
+
+    .. code-block:: diff
+
+      +    bar = models.ForeignKey(Bar, null=True, on_delete=models.CASCADE)
+
+    2. Make the new migration:
+
+    .. code-block:: bash
+
+      ./manage.py makemigrations
+
+    3. The only changes you need to perform are:
+
+       1. Swap Django's ``AddField`` for this package's
+          ``SaferAddFieldForeignKey`` operation.
+       2. Use a non-atomic migration.
+
+    .. code-block:: diff
+
+      + from django_pg_migration_tools import operations
+      from django.db import migrations
+
+
+      class Migration(migrations.Migration):
+      +   atomic = False
+
+          dependencies = [("myapp", "0042_dependency")]
+
+          operations = [
+      -        migrations.AddField(
+      +        operations.SaferAddFieldForeignKey(
+                  model_name="foo",
+                  name="bar",
+                  field=models.ForeignKey(
+                      null=True,
+                      on_delete=django.db.models.deletion.CASCADE,
+                      to='myapp.bar',
+                  ),
+              ),
+          ]
