@@ -8,13 +8,13 @@ asgiref==3.8.1
     #   django-stubs
 colorlog==6.9.0
     # via nox
-coverage==7.6.7
+coverage==7.6.8
     # via django-pg-migration-tools (pyproject.toml)
 distlib==0.3.9
     # via virtualenv
 dj-database-url==2.3.0
     # via django-pg-migration-tools (pyproject.toml)
-django==5.1.3
+django==5.1.4
     # via
     #   dj-database-url
     #   django-stubs
@@ -44,7 +44,7 @@ pluggy==1.5.0
     # via pytest
 psycopg2-binary==2.9.10
     # via django-pg-migration-tools (pyproject.toml)
-pytest==8.3.3
+pytest==8.3.4
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   pytest-django
@@ -61,5 +61,5 @@ typing-extensions==4.12.2
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext
-virtualenv==20.27.1
+virtualenv==20.28.0
     # via nox
