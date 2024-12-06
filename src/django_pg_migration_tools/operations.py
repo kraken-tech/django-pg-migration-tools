@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 from textwrap import dedent
+from typing import cast
 
 from django.contrib.postgres import operations as psql_operations
 from django.db import migrations, models
@@ -10,6 +12,8 @@ from django.db.migrations.operations import base as base_operations
 from django.db.migrations.operations import fields as operation_fields
 from django.db.migrations.operations import models as operation_models
 
+
+MAX_POSTGRES_IDENTIFIER_LEN = 63
 
 try:
     from psycopg import sql as psycopg_sql
@@ -27,15 +31,24 @@ class TimeoutQueries:
 
 class IndexQueries:
     CHECK_INVALID_INDEX = dedent("""
-    SELECT relname
-    FROM pg_class, pg_index
-    WHERE (
-        pg_index.indisvalid = false
-        AND pg_index.indexrelid = pg_class.oid
-        AND relname = %(index_name)s
-    );
+        SELECT relname
+        FROM pg_class, pg_index
+        WHERE (
+            pg_index.indisvalid = false
+            AND pg_index.indexrelid = pg_class.oid
+            AND relname = %(index_name)s
+        );
     """)
     DROP_INDEX = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
+    CHECK_VALID_INDEX = dedent("""
+        SELECT 1
+        FROM pg_class, pg_index
+        WHERE (
+            pg_index.indisvalid = true
+            AND pg_index.indexrelid = pg_class.oid
+            AND relname = %(index_name)s
+        );
+    """)
 
 
 class ConstraintQueries:
@@ -77,6 +90,33 @@ class ConstraintQueries:
         VALIDATE CONSTRAINT {constraint_name};
     """)
 
+    ALTER_TABLE_ADD_NOT_VALID_FK = dedent("""
+        ALTER TABLE {table_name}
+        ADD CONSTRAINT {constraint_name} FOREIGN KEY ({column_name})
+        REFERENCES {referred_table_name} ({referred_column_name})
+        DEFERRABLE INITIALLY DEFERRED
+        NOT VALID;
+    """)
+
+
+class ColumnQueries:
+    ALTER_TABLE_ADD_NULL_COLUMN = dedent("""
+        ALTER TABLE {table_name}
+        ADD COLUMN IF NOT EXISTS {column_name}
+        {column_type} NULL;
+    """)
+    ALTER_TABLE_DROP_COLUMN = dedent("""
+        ALTER TABLE {table_name}
+        DROP COLUMN {column_name};
+    """)
+    CHECK_COLUMN_EXISTS = dedent("""
+        SELECT 1
+        FROM pg_catalog.pg_attribute
+        WHERE
+            attrelid = %(table_name)s::regclass
+            AND attname = %(column_name)s;
+    """)
+
 
 class NullabilityQueries:
     IS_COLUMN_NOT_NULL = dedent("""
@@ -101,6 +141,74 @@ class NullabilityQueries:
     """)
 
 
+def build_postgres_identifier(items: list[str], suffix: str) -> str:
+    """
+    Build the name for a valid postgres identifier based on the items
+
+    Example:
+        build_postgres_identifier(["table_name", "column_name"], "idx")
+    Returns:
+        "table_name_column_name_idx"
+
+    If the string is too long, it will be chopped so that a summarising hash is
+    added. The suffix is preserved:
+
+    Example:
+        build_postgres_identifier(
+            ["this_string_containsss_32_chars!", "this_string_containsss_32_chars!"],
+            "suffix"
+        )
+    Returns:
+        this_string_containsss_32_chars!_this_string_co_e9493e80_suffix
+    """
+    base_name = "_".join(items + [suffix])
+    if len(base_name) <= MAX_POSTGRES_IDENTIFIER_LEN:
+        return base_name
+
+    hash_len = 8
+    hash_obj = hashlib.md5(base_name.encode())
+    hash_val = hash_obj.hexdigest()[:hash_len]
+
+    chop_threshold = (
+        MAX_POSTGRES_IDENTIFIER_LEN
+        # Includes two "_" chars.
+        - (len(suffix) + hash_len + 2)
+    )
+    chopped_name = base_name[:chop_threshold]
+    return f"{chopped_name}_{hash_val}_{suffix}"
+
+
+class IndexSQLBuilder:
+    """
+    An index builder class that does not take into consideration the Django
+    application state.
+
+    This class method names follow after models.Index to avoid name
+    sprawling.
+    """
+
+    def __init__(self, table_name: str, model_name: str, column_name: str) -> None:
+        self.table_name = table_name
+        self.model_name = model_name
+        self.column_name = column_name
+
+    def create_sql(self, unique: bool = False) -> str:
+        if unique:
+            base = "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS"
+        else:
+            base = "CREATE INDEX CONCURRENTLY IF NOT EXISTS"
+        return f'{base} "{self.name}" ON "{self.table_name}" ("{self.column_name}");'
+
+    def remove_sql(self) -> str:
+        return f'DROP INDEX CONCURRENTLY IF EXISTS "{self.name}";'
+
+    @property
+    def name(self) -> str:
+        return build_postgres_identifier(
+            [self.model_name, self.column_name], suffix="idx"
+        )
+
+
 class SafeIndexOperationManager(
     psql_operations.NotInTransactionMixin,
     base_operations.Operation,
@@ -111,7 +219,7 @@ class SafeIndexOperationManager(
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
-        index: models.Index,
+        index: models.Index | IndexSQLBuilder,
         unique: bool,
         model: type[models.Model],
     ) -> None:
@@ -123,16 +231,14 @@ class SafeIndexOperationManager(
         original_lock_timeout = self._show_lock_timeout(schema_editor)
         self._set_lock_timeout(schema_editor, "0")
 
-        self._ensure_not_an_invalid_index(schema_editor, index)
-        index_sql = str(index.create_sql(model, schema_editor, concurrently=True))
-        # Inject the IF NOT EXISTS because Django doesn't provide a handy
-        # if_not_exists: bool parameter for us to use.
-        index_sql = index_sql.replace(
-            "CREATE INDEX CONCURRENTLY", "CREATE INDEX CONCURRENTLY IF NOT EXISTS"
-        )
-        if unique:
-            index_sql = index_sql.replace("CREATE INDEX", "CREATE UNIQUE INDEX")
+        self._ensure_not_an_invalid_index(schema_editor, index.name)
 
+        index_sql = self._get_create_index_sql(
+            unique=unique,
+            model=model,
+            schema_editor=schema_editor,
+            index=index,
+        )
         schema_editor.execute(index_sql)
 
         self._set_lock_timeout(schema_editor, original_lock_timeout)
@@ -154,10 +260,10 @@ class SafeIndexOperationManager(
         original_lock_timeout = self._show_lock_timeout(schema_editor)
         self._set_lock_timeout(schema_editor, "0")
 
-        index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         # Differently from the CREATE INDEX operation, Django already provides
         # us with IF EXISTS when dropping an index... We don't have to do that
         # .replace() call here.
+        index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         schema_editor.execute(index_sql)
 
         self._set_lock_timeout(schema_editor, original_lock_timeout)
@@ -181,7 +287,7 @@ class SafeIndexOperationManager(
     def _ensure_not_an_invalid_index(
         self,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
-        index: models.Index,
+        index_name: str,
     ) -> None:
         """
         It is possible that the migration would have failed when:
@@ -199,9 +305,31 @@ class SafeIndexOperationManager(
         be recreated on next steps via CREATE INDEX CONCURRENTLY IF EXISTS.
         """
         cursor = schema_editor.connection.cursor()
-        cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index.name})
+        cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index_name})
         if cursor.fetchone():
-            cursor.execute(IndexQueries.DROP_INDEX.format(index.name))
+            cursor.execute(IndexQueries.DROP_INDEX.format(index_name))
+
+    def _get_create_index_sql(
+        self,
+        unique: bool,
+        model: type[models.Model],
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        index: models.Index | IndexSQLBuilder,
+    ) -> str:
+        if isinstance(index, IndexSQLBuilder):
+            assert model._meta.db_table == index.table_name
+            return index.create_sql(unique=unique)
+
+        index_sql = str(index.create_sql(model, schema_editor, concurrently=True))
+        # Inject the IF NOT EXISTS because Django doesn't provide a handy
+        # if_not_exists: bool parameter for us to use.
+        index_sql = index_sql.replace(
+            "CREATE INDEX CONCURRENTLY", "CREATE INDEX CONCURRENTLY IF NOT EXISTS"
+        )
+        if unique:
+            index_sql = index_sql.replace("CREATE INDEX", "CREATE UNIQUE INDEX")
+
+        return index_sql
 
 
 class ConstraintOperationError(Exception):
@@ -851,4 +979,261 @@ class SaferAlterFieldSetNotNull(operation_fields.AlterField):
         return (
             f"{base}. Note: Using django_pg_migration_tools "
             f"SaferAlterFieldSetNotNull operation."
+        )
+
+
+class ForeignKeyManager(base_operations.Operation):
+    def __init__(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+        model: type[models.Model],
+        model_name: str,
+        column_name: str,
+        field: models.ForeignKey[models.Model],
+    ) -> None:
+        if not field.null:
+            # Validate at initialisation, rather than wasting time later.
+            raise ValueError("Can't safely create a FK field with null=False")
+
+        self.app_label = app_label
+        self.schema_editor = schema_editor
+        self.from_state = from_state
+        self.to_state = to_state
+        self.model = model
+        self.model_name = model_name
+        # mimic Django behaviour of adding an "_id" suffix for fks.
+        self.column_name = f"{column_name}_id"
+        self.field = field
+        self.table_name = model._meta.db_table
+        self.constraint_name = build_postgres_identifier(
+            [self.table_name, self.column_name], suffix="fk"
+        )
+        # Note: the db_type method takes a connection but it doesn't perform
+        # any database queries.
+        column_type: str | None = field.target_field.db_type(
+            self.schema_editor.connection
+        )
+        assert column_type is not None
+        self.column_type: str = column_type
+
+        referred_column_name: str | None = self.field.to_fields[0]
+        assert referred_column_name is not None
+        self.referred_column_name: str = referred_column_name
+
+        self.related_model = cast(models.Model, self.field.related_model)
+        self.referred_table_name = self.related_model._meta.db_table
+        self.index_builder = IndexSQLBuilder(
+            model_name=self.model_name,
+            table_name=self.table_name,
+            column_name=self.column_name,
+        )
+
+    def add_fk_field(self) -> None:
+        """
+        Add a FK field on a model without blocking reads/writes for too long.
+
+        On a high-level, this routine will:
+
+        1. Add a NULL column to the table to host the FK.
+        2. Add an index on that column concurrently.
+        3. Add the FK constraint, initially marked as NOT VALID.
+        4. Validate that constraint.
+
+        The following routine takes into consideration:
+
+        Reentrancy:
+          Any of the given operations below may fail for a variety of
+          reasons. If a failure occurs, this routine can be rerun without
+          impacting correct execution. Each step progresses toward the
+          outcome while leaving the db in a consistent state.
+          If the operation fails mid-way through, it can still be picked up
+          again. The database isn't left in an inconsistent state.
+
+        Idempotency:
+          The code expects clients to retry migrations without extra
+          side-effects. So does this routine. Multiple calls to the
+          routine have the same effect on the system state as a single
+          call.
+
+        Small number of introspective SQL queries:
+          Introspective SQL queries are necessary for checking the state of
+          the database. This is required for idempotency and reentrancy. At
+          each step, the routine only fires as few introspective SQL
+          statements as necessary.
+        """
+        psql_operations.NotInTransactionMixin()._ensure_not_in_transaction(
+            self.schema_editor
+        )
+        if not self.allow_migrate_model(
+            self.schema_editor.connection.alias, self.model
+        ):
+            return
+
+        if not self._column_exists():
+            self._alter_table_add_null_column()
+            self._maybe_create_index()
+            self._alter_table_add_not_valid_fk()
+            self._alter_table_validate_constraint()
+            return
+
+        assert hasattr(self.field, "db_index")
+        if self.field.db_index and not self._valid_index_exists():
+            self._maybe_create_index()
+            self._alter_table_add_not_valid_fk()
+            self._alter_table_validate_constraint()
+            return
+
+        if not self._constraint_exists():
+            self._alter_table_add_not_valid_fk()
+            self._alter_table_validate_constraint()
+            return
+
+        if not self._is_constraint_valid():
+            self._alter_table_validate_constraint()
+            return
+
+    def drop_fk_field(self) -> None:
+        psql_operations.NotInTransactionMixin()._ensure_not_in_transaction(
+            self.schema_editor
+        )
+        if not self.allow_migrate_model(
+            self.schema_editor.connection.alias, self.model
+        ):
+            return
+
+        if not self._column_exists():
+            return
+
+        self._alter_table_drop_column()
+
+    def _column_exists(self) -> bool:
+        cursor = self.schema_editor.connection.cursor()
+        cursor.execute(
+            ColumnQueries.CHECK_COLUMN_EXISTS,
+            {"table_name": self.table_name, "column_name": self.column_name},
+        )
+        return bool(cursor.fetchone())
+
+    def _alter_table_add_null_column(self) -> None:
+        cursor = self.schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_ADD_NULL_COLUMN).format(
+                table_name=psycopg_sql.Identifier(self.table_name),
+                column_name=psycopg_sql.Identifier(self.column_name),
+                column_type=psycopg_sql.SQL(self.column_type),
+            ),
+        )
+
+    def _valid_index_exists(self) -> bool:
+        cursor = self.schema_editor.connection.cursor()
+        cursor.execute(
+            IndexQueries.CHECK_VALID_INDEX, {"index_name": self.index_builder.name}
+        )
+        return bool(cursor.fetchone())
+
+    def _maybe_create_index(self) -> None:
+        assert hasattr(self.field, "db_index")
+        if self.field.db_index:
+            SafeIndexOperationManager().safer_create_index(
+                app_label=self.app_label,
+                schema_editor=self.schema_editor,
+                from_state=self.from_state,
+                to_state=self.to_state,
+                index=self.index_builder,
+                model=self.model,
+                unique=False,
+            )
+
+    def _constraint_exists(self) -> bool:
+        cursor = self.schema_editor.connection.cursor()
+        cursor.execute(
+            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
+            {"constraint_name": self.constraint_name},
+        )
+        return bool(cursor.fetchone())
+
+    def _is_constraint_valid(self) -> bool:
+        cursor = self.schema_editor.connection.cursor()
+        cursor.execute(
+            ConstraintQueries.CHECK_CONSTRAINT_IS_VALID,
+            {"constraint_name": self.constraint_name},
+        )
+        return bool(cursor.fetchone())
+
+    def _alter_table_add_not_valid_fk(self) -> None:
+        cursor = self.schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK).format(
+                table_name=psycopg_sql.Identifier(self.table_name),
+                column_name=psycopg_sql.Identifier(self.column_name),
+                constraint_name=psycopg_sql.Identifier(self.constraint_name),
+                referred_table_name=psycopg_sql.Identifier(self.referred_table_name),
+                referred_column_name=psycopg_sql.Identifier(self.referred_column_name),
+            ),
+        )
+
+    def _alter_table_validate_constraint(self) -> None:
+        cursor = self.schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT).format(
+                table_name=psycopg_sql.Identifier(self.table_name),
+                constraint_name=psycopg_sql.Identifier(self.constraint_name),
+            )
+        )
+
+    def _alter_table_drop_column(self) -> None:
+        cursor = self.schema_editor.connection.cursor()
+        cursor.execute(
+            psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_DROP_COLUMN).format(
+                table_name=psycopg_sql.Identifier(self.table_name),
+                column_name=psycopg_sql.Identifier(self.column_name),
+            ),
+        )
+
+
+class SaferAddFieldForeignKey(operation_fields.AddField):
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        ForeignKeyManager(
+            app_label,
+            schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            model_name=self.model_name,
+            column_name=self.name,
+            field=cast(models.ForeignKey[models.Model], self.field),
+        ).add_fk_field()
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        ForeignKeyManager(
+            app_label,
+            schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            model_name=self.model_name,
+            column_name=self.name,
+            field=cast(models.ForeignKey[models.Model], self.field),
+        ).drop_fk_field()
+
+    def describe(self) -> str:
+        base = super().describe()
+        return (
+            f"{base}. Note: Using django_pg_migration_tools "
+            f"SaferAddFieldForeignKey operation."
         )

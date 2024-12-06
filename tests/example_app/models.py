@@ -36,3 +36,7 @@ class NullIntFieldModel(models.Model):
 class NotNullIntFieldModel(models.Model):
     # null=False is the default, but we set it here for clarity.
     int_field = models.IntegerField(null=False)
+
+
+class CharIDModel(models.Model):
+    id = models.CharField(max_length=42, primary_key=True)
