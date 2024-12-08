@@ -8,6 +8,13 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.11] - 2024-12-06
+
+### Added
+
+- A new operation to add foreign key fields to an existing table has been
+  added: `SaferAddFieldForeignKey`
+
 ## [0.1.10] - 2024-11-22
 
 ### Updated
