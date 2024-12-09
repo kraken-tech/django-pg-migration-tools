@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from textwrap import dedent
-from typing import cast
+from typing import Any, cast
 
 from django.contrib.postgres import operations as psql_operations
 from django.db import migrations, models
@@ -1011,20 +1011,6 @@ class ForeignKeyManager(base_operations.Operation):
         self.constraint_name = build_postgres_identifier(
             [self.table_name, self.column_name], suffix="fk"
         )
-        # Note: the db_type method takes a connection but it doesn't perform
-        # any database queries.
-        column_type: str | None = field.target_field.db_type(
-            self.schema_editor.connection
-        )
-        assert column_type is not None
-        self.column_type: str = column_type
-
-        referred_column_name: str | None = self.field.to_fields[0]
-        assert referred_column_name is not None
-        self.referred_column_name: str = referred_column_name
-
-        self.related_model = cast(models.Model, self.field.related_model)
-        self.referred_table_name = self.related_model._meta.db_table
         self.index_builder = IndexSQLBuilder(
             model_name=self.model_name,
             table_name=self.table_name,
@@ -1117,13 +1103,37 @@ class ForeignKeyManager(base_operations.Operation):
         )
         return bool(cursor.fetchone())
 
+    def _get_remote_model(self) -> models.Model:
+        if isinstance(self.field.remote_field.model, str):
+            app_name, model_name = self.field.remote_field.model.split(".")  # type: ignore[unreachable]
+
+            return self.from_state.apps.all_models[app_name][model_name.lower()]
+        else:
+            return cast(models.Model, self.field.related_model)
+
+    def _get_remote_pk_field(self) -> models.Field[Any, Any]:
+        remote_model = self._get_remote_model()
+        pk_field = next(
+            field
+            for field in remote_model._meta.get_fields()
+            if hasattr(field, "primary_key") and field.primary_key is True
+        )
+        assert isinstance(pk_field, models.Field)
+        return pk_field
+
+    def _get_column_type(self) -> str:
+        remote_field = self._get_remote_pk_field()
+        column_type: str | None = remote_field.db_type(self.schema_editor.connection)
+        assert column_type is not None
+        return column_type
+
     def _alter_table_add_null_column(self) -> None:
         cursor = self.schema_editor.connection.cursor()
         cursor.execute(
             psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_ADD_NULL_COLUMN).format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 column_name=psycopg_sql.Identifier(self.column_name),
-                column_type=psycopg_sql.SQL(self.column_type),
+                column_type=psycopg_sql.SQL(self._get_column_type()),
             ),
         )
 
@@ -1164,14 +1174,16 @@ class ForeignKeyManager(base_operations.Operation):
         return bool(cursor.fetchone())
 
     def _alter_table_add_not_valid_fk(self) -> None:
+        remote_model = self._get_remote_model()
+        remote_pk_field = self._get_remote_pk_field()
         cursor = self.schema_editor.connection.cursor()
         cursor.execute(
             psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK).format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 column_name=psycopg_sql.Identifier(self.column_name),
                 constraint_name=psycopg_sql.Identifier(self.constraint_name),
-                referred_table_name=psycopg_sql.Identifier(self.referred_table_name),
-                referred_column_name=psycopg_sql.Identifier(self.referred_column_name),
+                referred_table_name=psycopg_sql.Identifier(remote_model._meta.db_table),
+                referred_column_name=psycopg_sql.Identifier(remote_pk_field.name),
             ),
         )
 

@@ -2455,7 +2455,6 @@ class TestSaferSaferAddFieldForeignKey:
                 AND attname = 'char_id_model_field_id';
         """)
 
-    @pytest.mark.xfail
     @pytest.mark.django_db(transaction=True)
     def test_operation_when_referred_model_is_defined_as_str(self):
         project_state = ProjectState()
