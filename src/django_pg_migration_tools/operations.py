@@ -393,7 +393,7 @@ class ConstraintAlreadyExists(ConstraintOperationError):
 
 
 class SafeConstraintOperationManager(base_operations.Operation):
-    def create_constraint(
+    def create_unique_constraint(
         self,
         app_label: str,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
@@ -462,7 +462,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
         # since we have created the unique index in the previous step.
         return schema_editor.execute(sql)
 
-    def drop_constraint(
+    def drop_unique_constraint(
         self,
         app_label: str,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
@@ -681,7 +681,7 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
-        SafeConstraintOperationManager().create_constraint(
+        SafeConstraintOperationManager().create_unique_constraint(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -698,7 +698,7 @@ class SaferAddUniqueConstraint(operation_models.AddConstraint):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
-        SafeConstraintOperationManager().drop_constraint(
+        SafeConstraintOperationManager().drop_unique_constraint(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -736,7 +736,7 @@ class SaferRemoveUniqueConstraint(operation_models.RemoveConstraint):
     ) -> None:
         model = from_state.apps.get_model(app_label, self.model_name)
         from_model_state = from_state.models[app_label, self.model_name.lower()]
-        SafeConstraintOperationManager().drop_constraint(
+        SafeConstraintOperationManager().drop_unique_constraint(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
@@ -754,7 +754,7 @@ class SaferRemoveUniqueConstraint(operation_models.RemoveConstraint):
     ) -> None:
         model = to_state.apps.get_model(app_label, self.model_name)
         to_model_state = to_state.models[app_label, self.model_name.lower()]
-        SafeConstraintOperationManager().create_constraint(
+        SafeConstraintOperationManager().create_unique_constraint(
             app_label=app_label,
             schema_editor=schema_editor,
             from_state=from_state,
