@@ -2454,3 +2454,70 @@ class TestSaferSaferAddFieldForeignKey:
                 attrelid = 'example_app_intmodel'::regclass
                 AND attname = 'char_id_model_field_id';
         """)
+
+    @pytest.mark.xfail
+    @pytest.mark.django_db(transaction=True)
+    def test_operation_when_referred_model_is_defined_as_str(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAddFieldForeignKey(
+            model_name="intmodel",
+            name="char_model_field",
+            field=models.ForeignKey(
+                "example_app.CharModel",
+                null=True,
+                on_delete=models.CASCADE,
+                db_index=False,
+            ),
+        )
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(queries) == 4
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_intmodel'::regclass
+                AND attname = 'char_model_field_id';
+        """)
+        assert queries[1]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            ADD COLUMN IF NOT EXISTS "char_model_field_id"
+            integer NULL;
+        """)
+        assert queries[2]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            ADD CONSTRAINT "example_app_intmodel_char_model_field_id_fk" FOREIGN KEY ("char_model_field_id")
+            REFERENCES "example_app_charmodel" ("id")
+            DEFERRABLE INITIALLY DEFERRED
+            NOT VALID;
+        """)
+        assert queries[3]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            VALIDATE CONSTRAINT "example_app_intmodel_char_model_field_id_fk";
+        """)
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        assert len(reverse_queries) == 2
+
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_intmodel'::regclass
+                AND attname = 'char_model_field_id';
+        """)
+        assert reverse_queries[1]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            DROP COLUMN "char_model_field_id";
+        """)
