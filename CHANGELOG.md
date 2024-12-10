@@ -8,6 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed a bug preventing the `SaferAddFieldForeignKey` operation of being
+  initialised with a `to` argument that is a string instead of models.Model
+
 ## [0.1.11] - 2024-12-06
 
 ### Added
