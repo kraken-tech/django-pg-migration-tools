@@ -54,7 +54,7 @@ pytest-django==4.9.0
     # via django-pg-migration-tools (pyproject.toml)
 python-dotenv==1.0.1
     # via environs
-sqlparse==0.5.2
+sqlparse==0.5.3
     # via django
 types-pyyaml==6.0.12.20240917
     # via django-stubs
