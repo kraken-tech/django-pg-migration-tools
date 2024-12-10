@@ -8,6 +8,12 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Use `schema_editor` instead of opening a new cursor for executing DDL
+  queries. This is so that `sqlmigrate` can show the queries without actually
+  running them.
+
 ## [0.1.12] - 2024-12-10
 
 ### Fixed

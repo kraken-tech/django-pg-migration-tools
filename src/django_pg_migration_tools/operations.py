@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover
 
 class TimeoutQueries:
     SHOW_LOCK_TIMEOUT = "SHOW lock_timeout;"
-    SET_LOCK_TIMEOUT = "SET lock_timeout = %(lock_timeout)s;"
+    SET_LOCK_TIMEOUT = "SET lock_timeout = {lock_timeout};"
 
 
 class IndexQueries:
@@ -271,8 +271,11 @@ class SafeIndexOperationManager(
     def _set_lock_timeout(
         self, schema_editor: base_schema.BaseDatabaseSchemaEditor, value: str
     ) -> None:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(TimeoutQueries.SET_LOCK_TIMEOUT, {"lock_timeout": value})
+        schema_editor.execute(
+            psycopg_sql.SQL(TimeoutQueries.SET_LOCK_TIMEOUT)
+            .format(lock_timeout=psycopg_sql.Literal(value))
+            .as_string(schema_editor.connection.connection)
+        )
 
     def _show_lock_timeout(
         self,
@@ -827,15 +830,14 @@ class NullsManager(base_operations.Operation):
         column_name: str,
         constraint_name: str,
     ) -> None:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(
-                ConstraintQueries.ALTER_TABLE_CONSTRAINT_NOT_NULL_NOT_VALID
-            ).format(
+        schema_editor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_CONSTRAINT_NOT_NULL_NOT_VALID)
+            .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 column_name=psycopg_sql.Identifier(column_name),
                 constraint_name=psycopg_sql.Identifier(constraint_name),
             )
+            .as_string(schema_editor.connection.connection)
         )
 
     def _is_not_null(
@@ -882,12 +884,13 @@ class NullsManager(base_operations.Operation):
         table_name: str,
         column_name: str,
     ) -> None:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(NullabilityQueries.ALTER_TABLE_SET_NOT_NULL).format(
+        schema_editor.execute(
+            psycopg_sql.SQL(NullabilityQueries.ALTER_TABLE_SET_NOT_NULL)
+            .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 column_name=psycopg_sql.Identifier(column_name),
-            ),
+            )
+            .as_string(schema_editor.connection.connection)
         )
 
     def _alter_table_drop_not_null(
@@ -896,12 +899,13 @@ class NullsManager(base_operations.Operation):
         table_name: str,
         column_name: str,
     ) -> None:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(NullabilityQueries.ALTER_TABLE_DROP_NOT_NULL).format(
+        schema_editor.execute(
+            psycopg_sql.SQL(NullabilityQueries.ALTER_TABLE_DROP_NOT_NULL)
+            .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 column_name=psycopg_sql.Identifier(column_name),
-            ),
+            )
+            .as_string(schema_editor.connection.connection)
         )
 
     def _alter_table_drop_constraint(
@@ -910,12 +914,13 @@ class NullsManager(base_operations.Operation):
         table_name: str,
         constraint_name: str,
     ) -> None:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_DROP_CONSTRAINT).format(
+        schema_editor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_DROP_CONSTRAINT)
+            .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 constraint_name=psycopg_sql.Identifier(constraint_name),
             )
+            .as_string(schema_editor.connection.connection)
         )
 
     def _constraint_exists(
@@ -936,12 +941,13 @@ class NullsManager(base_operations.Operation):
         table_name: str,
         constraint_name: str,
     ) -> None:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT).format(
+        schema_editor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
+            .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 constraint_name=psycopg_sql.Identifier(constraint_name),
             )
+            .as_string(schema_editor.connection.connection)
         )
 
 
@@ -1128,13 +1134,14 @@ class ForeignKeyManager(base_operations.Operation):
         return column_type
 
     def _alter_table_add_null_column(self) -> None:
-        cursor = self.schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_ADD_NULL_COLUMN).format(
+        self.schema_editor.execute(
+            psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_ADD_NULL_COLUMN)
+            .format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 column_name=psycopg_sql.Identifier(self.column_name),
                 column_type=psycopg_sql.SQL(self._get_column_type()),
-            ),
+            )
+            .as_string(self.schema_editor.connection.connection)
         )
 
     def _valid_index_exists(self) -> bool:
@@ -1176,33 +1183,36 @@ class ForeignKeyManager(base_operations.Operation):
     def _alter_table_add_not_valid_fk(self) -> None:
         remote_model = self._get_remote_model()
         remote_pk_field = self._get_remote_pk_field()
-        cursor = self.schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK).format(
+        self.schema_editor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK)
+            .format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 column_name=psycopg_sql.Identifier(self.column_name),
                 constraint_name=psycopg_sql.Identifier(self.constraint_name),
                 referred_table_name=psycopg_sql.Identifier(remote_model._meta.db_table),
                 referred_column_name=psycopg_sql.Identifier(remote_pk_field.name),
-            ),
+            )
+            .as_string(self.schema_editor.connection.connection)
         )
 
     def _alter_table_validate_constraint(self) -> None:
-        cursor = self.schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT).format(
+        self.schema_editor.execute(
+            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
+            .format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 constraint_name=psycopg_sql.Identifier(self.constraint_name),
             )
+            .as_string(self.schema_editor.connection.connection)
         )
 
     def _alter_table_drop_column(self) -> None:
-        cursor = self.schema_editor.connection.cursor()
-        cursor.execute(
-            psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_DROP_COLUMN).format(
+        self.schema_editor.execute(
+            psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_DROP_COLUMN)
+            .format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 column_name=psycopg_sql.Identifier(self.column_name),
-            ),
+            )
+            .as_string(self.schema_editor.connection.connection)
         )
 
 
