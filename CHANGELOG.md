@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.12] - 2024-12-10
+
 ### Fixed
 
 - Fixed a bug preventing the `SaferAddFieldForeignKey` operation of being
