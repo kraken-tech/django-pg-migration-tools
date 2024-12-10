@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.13] - 2024-12-11
+
 ### Fixed
 
 - Use `schema_editor` instead of opening a new cursor for executing DDL
