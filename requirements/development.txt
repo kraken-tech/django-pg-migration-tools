@@ -2,7 +2,7 @@
 #    uv pip compile pyproject.toml --resolver=backtracking --extra=dev --output-file=requirements/development.txt
 alabaster==1.0.0
     # via sphinx
-argcomplete==3.5.1
+argcomplete==3.5.2
     # via nox
 asgiref==3.8.1
     # via
@@ -20,7 +20,7 @@ charset-normalizer==3.4.0
     # via requests
 colorlog==6.9.0
     # via nox
-coverage==7.6.8
+coverage==7.6.9
     # via django-pg-migration-tools (pyproject.toml)
 distlib==0.3.9
     # via virtualenv
