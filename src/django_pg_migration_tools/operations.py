@@ -36,17 +36,17 @@ class IndexQueries:
         WHERE (
             pg_index.indisvalid = false
             AND pg_index.indexrelid = pg_class.oid
-            AND relname = %(index_name)s
+            AND relname = {index_name}
         );
     """)
-    DROP_INDEX = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
+    DROP_INDEX = "DROP INDEX CONCURRENTLY IF EXISTS {index_name};"
     CHECK_VALID_INDEX = dedent("""
         SELECT 1
         FROM pg_class, pg_index
         WHERE (
             pg_index.indisvalid = true
             AND pg_index.indexrelid = pg_class.oid
-            AND relname = %(index_name)s
+            AND relname = {index_name}
         );
     """)
 
@@ -55,14 +55,14 @@ class ConstraintQueries:
     CHECK_EXISTING_CONSTRAINT = dedent("""
         SELECT conname
         FROM pg_catalog.pg_constraint
-        WHERE conname = %(constraint_name)s;
+        WHERE conname = {constraint_name};
     """)
 
     CHECK_CONSTRAINT_IS_VALID = dedent("""
         SELECT 1
         FROM pg_catalog.pg_constraint
         WHERE
-            conname = %(constraint_name)s
+            conname = {constraint_name}
             AND convalidated IS TRUE;
     """)
 
@@ -113,8 +113,8 @@ class ColumnQueries:
         SELECT 1
         FROM pg_catalog.pg_attribute
         WHERE
-            attrelid = %(table_name)s::regclass
-            AND attname = %(column_name)s;
+            attrelid = {table_name}::regclass
+            AND attname = {column_name};
     """)
 
 
@@ -123,8 +123,8 @@ class NullabilityQueries:
         SELECT 1
         FROM pg_catalog.pg_attribute
         WHERE
-            attrelid = %(table_name)s::regclass
-            AND attname = %(column_name)s
+            attrelid = {table_name}::regclass
+            AND attname = {column_name}
             AND attnotnull IS TRUE;
     """)
 
@@ -282,7 +282,11 @@ class SafeIndexOperationManager(
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
     ) -> str:
         cursor = schema_editor.connection.cursor()
-        cursor.execute(TimeoutQueries.SHOW_LOCK_TIMEOUT)
+        cursor.execute(
+            psycopg_sql.SQL(TimeoutQueries.SHOW_LOCK_TIMEOUT).as_string(
+                schema_editor.connection.connection
+            )
+        )
         result = cursor.fetchone()[0]
         assert isinstance(result, str)
         return result
@@ -308,9 +312,17 @@ class SafeIndexOperationManager(
         be recreated on next steps via CREATE INDEX CONCURRENTLY IF EXISTS.
         """
         cursor = schema_editor.connection.cursor()
-        cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index_name})
-        if cursor.fetchone():
-            cursor.execute(IndexQueries.DROP_INDEX.format(index_name))
+        cursor.execute(
+            psycopg_sql.SQL(IndexQueries.CHECK_INVALID_INDEX)
+            .format(index_name=psycopg_sql.Literal(index_name))
+            .as_string(schema_editor.connection.connection)
+        )
+        if bool(cursor.fetchone()):
+            cursor.execute(
+                psycopg_sql.SQL(IndexQueries.DROP_INDEX)
+                .format(index_name=psycopg_sql.Identifier(index_name))
+                .as_string(schema_editor.connection.connection)
+            )
 
     def _get_create_index_sql(
         self,
@@ -487,8 +499,9 @@ class SafeConstraintOperationManager(base_operations.Operation):
     ) -> bool:
         cursor = schema_editor.connection.cursor()
         cursor.execute(
-            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
-            {"constraint_name": constraint.name},
+            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            .format(constraint_name=psycopg_sql.Literal(constraint.name))
+            .as_string(schema_editor.connection.connection)
         )
         return bool(cursor.fetchone())
 
@@ -848,8 +861,12 @@ class NullsManager(base_operations.Operation):
     ) -> bool:
         cursor = schema_editor.connection.cursor()
         cursor.execute(
-            NullabilityQueries.IS_COLUMN_NOT_NULL,
-            {"table_name": table_name, "column_name": column_name},
+            psycopg_sql.SQL(NullabilityQueries.IS_COLUMN_NOT_NULL)
+            .format(
+                table_name=psycopg_sql.Literal(table_name),
+                column_name=psycopg_sql.Literal(column_name),
+            )
+            .as_string(schema_editor.connection.connection)
         )
         return bool(cursor.fetchone())
 
@@ -873,8 +890,9 @@ class NullsManager(base_operations.Operation):
     ) -> bool:
         cursor = schema_editor.connection.cursor()
         cursor.execute(
-            ConstraintQueries.CHECK_CONSTRAINT_IS_VALID,
-            {"constraint_name": constraint_name},
+            psycopg_sql.SQL(ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+            .format(constraint_name=psycopg_sql.Literal(constraint_name))
+            .as_string(schema_editor.connection.connection)
         )
         return bool(cursor.fetchone())
 
@@ -930,8 +948,9 @@ class NullsManager(base_operations.Operation):
     ) -> bool:
         cursor = schema_editor.connection.cursor()
         cursor.execute(
-            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
-            {"constraint_name": constraint_name},
+            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            .format(constraint_name=psycopg_sql.Literal(constraint_name))
+            .as_string(schema_editor.connection.connection)
         )
         return bool(cursor.fetchone())
 
@@ -1104,8 +1123,12 @@ class ForeignKeyManager(base_operations.Operation):
     def _column_exists(self) -> bool:
         cursor = self.schema_editor.connection.cursor()
         cursor.execute(
-            ColumnQueries.CHECK_COLUMN_EXISTS,
-            {"table_name": self.table_name, "column_name": self.column_name},
+            psycopg_sql.SQL(ColumnQueries.CHECK_COLUMN_EXISTS)
+            .format(
+                table_name=psycopg_sql.Literal(self.table_name),
+                column_name=psycopg_sql.Literal(self.column_name),
+            )
+            .as_string(self.schema_editor.connection.connection)
         )
         return bool(cursor.fetchone())
 
@@ -1147,7 +1170,9 @@ class ForeignKeyManager(base_operations.Operation):
     def _valid_index_exists(self) -> bool:
         cursor = self.schema_editor.connection.cursor()
         cursor.execute(
-            IndexQueries.CHECK_VALID_INDEX, {"index_name": self.index_builder.name}
+            psycopg_sql.SQL(IndexQueries.CHECK_VALID_INDEX)
+            .format(index_name=psycopg_sql.Literal(self.index_builder.name))
+            .as_string(self.schema_editor.connection.connection)
         )
         return bool(cursor.fetchone())
 
@@ -1167,16 +1192,18 @@ class ForeignKeyManager(base_operations.Operation):
     def _constraint_exists(self) -> bool:
         cursor = self.schema_editor.connection.cursor()
         cursor.execute(
-            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
-            {"constraint_name": self.constraint_name},
+            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            .format(constraint_name=psycopg_sql.Literal(self.constraint_name))
+            .as_string(self.schema_editor.connection.connection)
         )
         return bool(cursor.fetchone())
 
     def _is_constraint_valid(self) -> bool:
         cursor = self.schema_editor.connection.cursor()
         cursor.execute(
-            ConstraintQueries.CHECK_CONSTRAINT_IS_VALID,
-            {"constraint_name": self.constraint_name},
+            psycopg_sql.SQL(ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+            .format(constraint_name=psycopg_sql.Literal(self.constraint_name))
+            .as_string(self.schema_editor.connection.connection)
         )
         return bool(cursor.fetchone())
 
