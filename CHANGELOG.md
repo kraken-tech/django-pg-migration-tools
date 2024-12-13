@@ -8,6 +8,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Introspection queries are now skipped when running `sqlmigrate`.
+
 ## [0.1.13] - 2024-12-11
 
 ### Fixed

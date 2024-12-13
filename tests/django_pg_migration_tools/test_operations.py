@@ -254,6 +254,30 @@ class TestSaferAddIndexConcurrently:
             )
             assert not cursor.fetchone()
 
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        index = Index(fields=["int_field"], name="int_field_idx")
+        operation = operations.SaferAddIndexConcurrently("IntModel", index)
+
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 0
+
+        assert len(editor.collected_sql) == 3
+        editor.collected_sql[0] = "SET lock_timeout = '0';"
+        editor.collected_sql[1] = (
+            'CREATE INDEX CONCURRENTLY IF NOT EXISTS "int_field_idx" ON "example_app_intmodel" ("int_field");'
+        )
+        editor.collected_sql[2] = "SET lock_timeout = '0';"
+
     # Disable the overall test transaction because a concurrent index cannot
     # be triggered/tested inside of a transaction.
     @pytest.mark.django_db(transaction=True)
@@ -431,6 +455,31 @@ class TestSaferRemoveIndexConcurrently:
             == 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "char_field_idx" ON "example_app_charmodel" ("char_field")'
         )
         assert reverse_queries[4]["sql"] == "SET lock_timeout = '1s';"
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveIndexConcurrently(
+            model_name="charmodel", name="char_field_idx"
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 0
+
+        assert len(editor.collected_sql) == 3
+        editor.collected_sql[0] = "SET lock_timeout = '0';"
+        editor.collected_sql[1] = (
+            'DROP INDEX CONCURRENTLY IF EXISTS "int_field_idx" ON "example_app_intmodel" ("int_field");'
+        )
+        editor.collected_sql[2] = "SET lock_timeout = '0';"
 
     # Disable the overall test transaction because a concurrent index cannot
     # be triggered/tested inside of a transaction.
@@ -820,6 +869,39 @@ class TestSaferAddUniqueConstraint:
                 },
             )
             assert not cursor.fetchone()
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddUniqueConstraint(
+            model_name="intmodel",
+            constraint=UniqueConstraint(
+                fields=("int_field",),
+                name="unique_int_field",
+            ),
+        )
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 0
+        assert len(editor.collected_sql) == 4
+
+        assert editor.collected_sql[0] == "SET lock_timeout = '0';"
+        assert (
+            editor.collected_sql[1]
+            == 'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "unique_int_field" ON "example_app_intmodel" ("int_field");'
+        )
+        assert editor.collected_sql[2] == "SET lock_timeout = '0';"
+        assert (
+            editor.collected_sql[3]
+            == 'ALTER TABLE "example_app_intmodel" ADD CONSTRAINT "unique_int_field" UNIQUE USING INDEX "unique_int_field";'
+        )
 
     # Disable the overall test transaction because a unique concurrent index
     # creation followed by a constraint addition cannot be triggered/tested
@@ -1577,6 +1659,46 @@ class TestSaferAlterFieldSetNotNull:
         """)
 
     @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="nullintfieldmodel",
+            name="int_field",
+            field=models.IntegerField(null=False),
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 0
+
+        assert len(editor.collected_sql) == 4
+
+        assert editor.collected_sql[0] == dedent("""
+                ALTER TABLE "example_app_nullintfieldmodel"
+                ADD CONSTRAINT "example_ap_int_field_59f69830a8"
+                CHECK ("int_field" IS NOT NULL) NOT VALID;
+            """)
+        assert editor.collected_sql[1] == dedent("""
+                ALTER TABLE "example_app_nullintfieldmodel"
+                VALIDATE CONSTRAINT "example_ap_int_field_59f69830a8";
+            """)
+        assert editor.collected_sql[2] == dedent("""
+                ALTER TABLE "example_app_nullintfieldmodel"
+                ALTER COLUMN "int_field"
+                SET NOT NULL;
+            """)
+        assert editor.collected_sql[3] == dedent("""
+                ALTER TABLE "example_app_nullintfieldmodel"
+                DROP CONSTRAINT "example_ap_int_field_59f69830a8";
+            """)
+
+    @pytest.mark.django_db(transaction=True)
     def test_when_field_is_already_not_nullable(self):
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(NotNullIntFieldModel))
@@ -1946,6 +2068,48 @@ class TestSaferSaferAddFieldForeignKey:
             WHERE
                 attrelid = 'example_app_intmodel'::regclass
                 AND attname = 'char_model_field_id';
+        """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAddFieldForeignKey(
+            model_name="intmodel",
+            name="char_model_field",
+            field=models.ForeignKey(CharModel, null=True, on_delete=models.CASCADE),
+        )
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 0
+        assert len(editor.collected_sql) == 6
+
+        assert editor.collected_sql[0] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            ADD COLUMN IF NOT EXISTS "char_model_field_id"
+            integer NULL;
+                                        """)
+        assert editor.collected_sql[1] == "SET lock_timeout = '0';"
+        assert (
+            editor.collected_sql[2]
+            == 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "intmodel_char_model_field_id_idx" ON "example_app_intmodel" ("char_model_field_id");'
+        )
+        assert editor.collected_sql[3] == "SET lock_timeout = '0';"
+        assert editor.collected_sql[4] == dedent("""
+           ALTER TABLE "example_app_intmodel"
+           ADD CONSTRAINT "example_app_intmodel_char_model_field_id_fk" FOREIGN KEY ("char_model_field_id")
+           REFERENCES "example_app_charmodel" ("id")
+           DEFERRABLE INITIALLY DEFERRED
+           NOT VALID;
+        """)
+        assert editor.collected_sql[5] == dedent("""
+           ALTER TABLE "example_app_intmodel"
+           VALIDATE CONSTRAINT "example_app_intmodel_char_model_field_id_fk";
         """)
 
     @pytest.mark.django_db(transaction=True)
