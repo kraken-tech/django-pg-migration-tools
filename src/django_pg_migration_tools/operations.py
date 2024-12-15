@@ -142,7 +142,7 @@ class NullabilityQueries:
 
 
 @overload
-def _run_introspection_query(  # pragma: no cover
+def _run_introspection_query(
     schema_editor: base_schema.BaseDatabaseSchemaEditor,
     query: str,
     collect_default: bool = False,
@@ -150,7 +150,7 @@ def _run_introspection_query(  # pragma: no cover
 
 
 @overload
-def _run_introspection_query(  # pragma: no cover
+def _run_introspection_query(
     schema_editor: base_schema.BaseDatabaseSchemaEditor,
     query: str,
     collect_default: str,
