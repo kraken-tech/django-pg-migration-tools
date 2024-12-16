@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from textwrap import dedent
-from typing import Any, cast
+from typing import Any, cast, overload
 
 from django.contrib.postgres import operations as psql_operations
 from django.db import migrations, models
@@ -36,17 +36,17 @@ class IndexQueries:
         WHERE (
             pg_index.indisvalid = false
             AND pg_index.indexrelid = pg_class.oid
-            AND relname = %(index_name)s
+            AND relname = {index_name}
         );
     """)
-    DROP_INDEX = 'DROP INDEX CONCURRENTLY IF EXISTS "{}";'
+    DROP_INDEX = "DROP INDEX CONCURRENTLY IF EXISTS {index_name};"
     CHECK_VALID_INDEX = dedent("""
         SELECT 1
         FROM pg_class, pg_index
         WHERE (
             pg_index.indisvalid = true
             AND pg_index.indexrelid = pg_class.oid
-            AND relname = %(index_name)s
+            AND relname = {index_name}
         );
     """)
 
@@ -55,14 +55,14 @@ class ConstraintQueries:
     CHECK_EXISTING_CONSTRAINT = dedent("""
         SELECT conname
         FROM pg_catalog.pg_constraint
-        WHERE conname = %(constraint_name)s;
+        WHERE conname = {constraint_name};
     """)
 
     CHECK_CONSTRAINT_IS_VALID = dedent("""
         SELECT 1
         FROM pg_catalog.pg_constraint
         WHERE
-            conname = %(constraint_name)s
+            conname = {constraint_name}
             AND convalidated IS TRUE;
     """)
 
@@ -113,8 +113,8 @@ class ColumnQueries:
         SELECT 1
         FROM pg_catalog.pg_attribute
         WHERE
-            attrelid = %(table_name)s::regclass
-            AND attname = %(column_name)s;
+            attrelid = {table_name}::regclass
+            AND attname = {column_name};
     """)
 
 
@@ -123,8 +123,8 @@ class NullabilityQueries:
         SELECT 1
         FROM pg_catalog.pg_attribute
         WHERE
-            attrelid = %(table_name)s::regclass
-            AND attname = %(column_name)s
+            attrelid = {table_name}::regclass
+            AND attname = {column_name}
             AND attnotnull IS TRUE;
     """)
 
@@ -139,6 +139,44 @@ class NullabilityQueries:
         ALTER COLUMN {column_name}
         DROP NOT NULL;
     """)
+
+
+@overload
+def _run_introspection_query(
+    schema_editor: base_schema.BaseDatabaseSchemaEditor,
+    query: str,
+    collect_default: bool = False,
+) -> bool: ...
+
+
+@overload
+def _run_introspection_query(
+    schema_editor: base_schema.BaseDatabaseSchemaEditor,
+    query: str,
+    collect_default: str,
+) -> str: ...
+
+
+def _run_introspection_query(
+    schema_editor: base_schema.BaseDatabaseSchemaEditor,
+    query: str,
+    collect_default: bool | str = False,
+) -> bool | str:
+    if schema_editor.collect_sql:
+        # Running in `sqlmigrate` mode and just collecting queries.
+        # We don't display introspection queries in the output of `sqlmigrate`.
+        # To do so would be confusing, particularly because some introspective
+        # queries will only run in certain situations but not others. It
+        # depends on the state of the database schema.
+        return collect_default
+
+    # Running in `migrate` mode. Fetch the results for real.
+    cursor = schema_editor.connection.cursor()
+    cursor.execute(query)
+    if isinstance(collect_default, bool):
+        return bool(cursor.fetchone())
+    else:
+        return str(cursor.fetchone()[0])
 
 
 def build_postgres_identifier(items: list[str], suffix: str) -> str:
@@ -281,11 +319,13 @@ class SafeIndexOperationManager(
         self,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
     ) -> str:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(TimeoutQueries.SHOW_LOCK_TIMEOUT)
-        result = cursor.fetchone()[0]
-        assert isinstance(result, str)
-        return result
+        return _run_introspection_query(
+            schema_editor,
+            psycopg_sql.SQL(TimeoutQueries.SHOW_LOCK_TIMEOUT).as_string(
+                schema_editor.connection.connection
+            ),
+            collect_default="0",
+        )
 
     def _ensure_not_an_invalid_index(
         self,
@@ -308,9 +348,18 @@ class SafeIndexOperationManager(
         be recreated on next steps via CREATE INDEX CONCURRENTLY IF EXISTS.
         """
         cursor = schema_editor.connection.cursor()
-        cursor.execute(IndexQueries.CHECK_INVALID_INDEX, {"index_name": index_name})
-        if cursor.fetchone():
-            cursor.execute(IndexQueries.DROP_INDEX.format(index_name))
+        result = _run_introspection_query(
+            schema_editor,
+            psycopg_sql.SQL(IndexQueries.CHECK_INVALID_INDEX)
+            .format(index_name=psycopg_sql.Literal(index_name))
+            .as_string(schema_editor.connection.connection),
+        )
+        if result:
+            cursor.execute(
+                psycopg_sql.SQL(IndexQueries.DROP_INDEX)
+                .format(index_name=psycopg_sql.Identifier(index_name))
+                .as_string(schema_editor.connection.connection)
+            )
 
     def _get_create_index_sql(
         self,
@@ -485,12 +534,12 @@ class SafeConstraintOperationManager(base_operations.Operation):
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         constraint: models.UniqueConstraint,
     ) -> bool:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
-            {"constraint_name": constraint.name},
+        return _run_introspection_query(
+            schema_editor,
+            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            .format(constraint_name=psycopg_sql.Literal(constraint.name))
+            .as_string(schema_editor.connection.connection),
         )
-        return bool(cursor.fetchone())
 
 
 class SaferAddIndexConcurrently(psql_operations.AddIndexConcurrently):
@@ -846,12 +895,15 @@ class NullsManager(base_operations.Operation):
         table_name: str,
         column_name: str,
     ) -> bool:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            NullabilityQueries.IS_COLUMN_NOT_NULL,
-            {"table_name": table_name, "column_name": column_name},
+        return _run_introspection_query(
+            schema_editor,
+            psycopg_sql.SQL(NullabilityQueries.IS_COLUMN_NOT_NULL)
+            .format(
+                table_name=psycopg_sql.Literal(table_name),
+                column_name=psycopg_sql.Literal(column_name),
+            )
+            .as_string(schema_editor.connection.connection),
         )
-        return bool(cursor.fetchone())
 
     def _get_constraint_name(self, table_name: str, column_name: str) -> str:
         """
@@ -871,12 +923,12 @@ class NullsManager(base_operations.Operation):
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         constraint_name: str,
     ) -> bool:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            ConstraintQueries.CHECK_CONSTRAINT_IS_VALID,
-            {"constraint_name": constraint_name},
+        return _run_introspection_query(
+            schema_editor,
+            psycopg_sql.SQL(ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+            .format(constraint_name=psycopg_sql.Literal(constraint_name))
+            .as_string(schema_editor.connection.connection),
         )
-        return bool(cursor.fetchone())
 
     def _alter_table_not_null(
         self,
@@ -928,12 +980,12 @@ class NullsManager(base_operations.Operation):
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         constraint_name: str,
     ) -> bool:
-        cursor = schema_editor.connection.cursor()
-        cursor.execute(
-            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
-            {"constraint_name": constraint_name},
+        return _run_introspection_query(
+            schema_editor,
+            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            .format(constraint_name=psycopg_sql.Literal(constraint_name))
+            .as_string(schema_editor.connection.connection),
         )
-        return bool(cursor.fetchone())
 
     def _validate_constraint(
         self,
@@ -1102,12 +1154,15 @@ class ForeignKeyManager(base_operations.Operation):
         self._alter_table_drop_column()
 
     def _column_exists(self) -> bool:
-        cursor = self.schema_editor.connection.cursor()
-        cursor.execute(
-            ColumnQueries.CHECK_COLUMN_EXISTS,
-            {"table_name": self.table_name, "column_name": self.column_name},
+        return _run_introspection_query(
+            self.schema_editor,
+            psycopg_sql.SQL(ColumnQueries.CHECK_COLUMN_EXISTS)
+            .format(
+                table_name=psycopg_sql.Literal(self.table_name),
+                column_name=psycopg_sql.Literal(self.column_name),
+            )
+            .as_string(self.schema_editor.connection.connection),
         )
-        return bool(cursor.fetchone())
 
     def _get_remote_model(self) -> models.Model:
         if isinstance(self.field.remote_field.model, str):
@@ -1145,11 +1200,12 @@ class ForeignKeyManager(base_operations.Operation):
         )
 
     def _valid_index_exists(self) -> bool:
-        cursor = self.schema_editor.connection.cursor()
-        cursor.execute(
-            IndexQueries.CHECK_VALID_INDEX, {"index_name": self.index_builder.name}
+        return _run_introspection_query(
+            self.schema_editor,
+            psycopg_sql.SQL(IndexQueries.CHECK_VALID_INDEX)
+            .format(index_name=psycopg_sql.Literal(self.index_builder.name))
+            .as_string(self.schema_editor.connection.connection),
         )
-        return bool(cursor.fetchone())
 
     def _maybe_create_index(self) -> None:
         assert hasattr(self.field, "db_index")
@@ -1165,20 +1221,20 @@ class ForeignKeyManager(base_operations.Operation):
             )
 
     def _constraint_exists(self) -> bool:
-        cursor = self.schema_editor.connection.cursor()
-        cursor.execute(
-            ConstraintQueries.CHECK_EXISTING_CONSTRAINT,
-            {"constraint_name": self.constraint_name},
+        return _run_introspection_query(
+            self.schema_editor,
+            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            .format(constraint_name=psycopg_sql.Literal(self.constraint_name))
+            .as_string(self.schema_editor.connection.connection),
         )
-        return bool(cursor.fetchone())
 
     def _is_constraint_valid(self) -> bool:
-        cursor = self.schema_editor.connection.cursor()
-        cursor.execute(
-            ConstraintQueries.CHECK_CONSTRAINT_IS_VALID,
-            {"constraint_name": self.constraint_name},
+        return _run_introspection_query(
+            self.schema_editor,
+            psycopg_sql.SQL(ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+            .format(constraint_name=psycopg_sql.Literal(self.constraint_name))
+            .as_string(self.schema_editor.connection.connection),
         )
-        return bool(cursor.fetchone())
 
     def _alter_table_add_not_valid_fk(self) -> None:
         remote_model = self._get_remote_model()

@@ -8,6 +8,14 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Introspection queries are now skipped when running `sqlmigrate`. The result
+  of the `sqlmigrate` command will instead show a best-effort plan to perform
+  the migration without knowing the current state of the database. When running
+  `migrate`, however, the introspection queries will find the most adequate
+  plan; taking into consideration idempotency and reentrancy.
+
 ## [0.1.13] - 2024-12-11
 
 ### Fixed

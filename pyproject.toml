@@ -159,3 +159,11 @@ filterwarnings = "error"
 # Ensure that tests fail if an xfail test unexpectedly passes.
 xfail_strict = true
 DJANGO_SETTINGS_MODULE = "tests.example_app.settings"
+
+# Coverage
+# --------
+
+[tool.coverage.report]
+exclude_also = [
+    '@overload',
+]
