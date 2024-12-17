@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.14] - 2024-12-17
+
 ### Added
 
 - A new operation to add a check constraint to an existing table has been
