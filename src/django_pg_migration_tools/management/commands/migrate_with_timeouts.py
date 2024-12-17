@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import hashlib
 import importlib
 import io
 import time
@@ -7,6 +8,7 @@ from typing import Any, Protocol, cast
 
 from django.core.management import base
 from django.core.management.commands.migrate import Command as DjangoMigrationMC
+from django.db import connections
 from typing_extensions import Self
 
 from django_pg_migration_tools import timeouts
@@ -105,6 +107,9 @@ class Command(DjangoMigrationMC):
         stdout: io.StringIO = options.pop("stdout", io.StringIO())
         start_time: float = time.time()
         database: str = options["database"]
+        Locking().acquire_advisory_session_lock(
+            using=database, value="migrate-with-timeouts"
+        )
         while retry_strategy.can_migrate():
             try:
                 with timeouts.apply_timeouts(
@@ -126,6 +131,32 @@ class Command(DjangoMigrationMC):
             f"There were {retry_strategy.retries} lock timeouts. "
             f"This happened because --lock-timeout-max-retries was set to "
             f"{timeout_options.lock_retry_options.max_retries}."
+        )
+
+
+class LockAlreadyAcquired(Exception):
+    pass
+
+
+class Locking:
+    def acquire_advisory_session_lock(self, using: str, value: str) -> None:
+        with connections[using].cursor() as cursor:
+            lock_id = self._cast_lock_value_to_int(value)
+            cursor.execute(f"SELECT pg_try_advisory_lock({lock_id});")
+            acquired = cursor.fetchone()[0]
+
+        if not acquired:
+            raise LockAlreadyAcquired(
+                "Another migrate_with_timeouts command is already running."
+            )
+
+    def _cast_lock_value_to_int(self, value: str) -> int:
+        """
+        Based on:
+        https://github.com/Opus10/django-pglock/blob/bf7422d3a74eed8196e13f6b28b72fb0623560e5/pglock/core.py#L137-L139
+        """
+        return int.from_bytes(
+            hashlib.sha256(value.encode("utf-8")).digest()[:8], "little", signed=True
         )
 
 

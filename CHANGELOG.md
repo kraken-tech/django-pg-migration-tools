@@ -8,6 +8,13 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- The `migrate_with_timeouts` command now acquires a session-level advisory
+  lock before it begins. This helps preventing concurrent instances of the
+  migrate command from running at the same time, which could cause unexpected
+  crashes.
+
 ## [0.1.14] - 2024-12-17
 
 ### Added
