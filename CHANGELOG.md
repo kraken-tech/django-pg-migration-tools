@@ -8,6 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- A new operation to add a check constraint to an existing table has been
+  added: `SaferAddCheckConstraint`.
+
 ### Fixed
 
 - Introspection queries are now skipped when running `sqlmigrate`. The result

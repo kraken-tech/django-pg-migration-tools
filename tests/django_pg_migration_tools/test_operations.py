@@ -1,6 +1,7 @@
 from textwrap import dedent
 from typing import Any
 
+import django
 import pytest
 from django.db import (
     NotSupportedError,
@@ -11,7 +12,7 @@ from django.db.migrations.state import (
     ModelState,
     ProjectState,
 )
-from django.db.models import BaseConstraint, Index, Q, UniqueConstraint
+from django.db.models import BaseConstraint, CheckConstraint, Index, Q, UniqueConstraint
 from django.test import override_settings, utils
 
 from django_pg_migration_tools import operations
@@ -2700,4 +2701,357 @@ class TestSaferSaferAddFieldForeignKey:
         assert reverse_queries[1]["sql"] == dedent("""
             ALTER TABLE "example_app_intmodel"
             DROP COLUMN "char_model_field_id";
+        """)
+
+
+class TestSaferAddCheckConstraint:
+    app_label = "example_app"
+
+    def _get_check_constraint(self, condition: Q, name: str) -> CheckConstraint:
+        if django.VERSION >= (5, 1):
+            # https://docs.djangoproject.com/en/5.1/releases/5.1/
+            # The check keyword argument of CheckConstraint is deprecated in
+            # favor of condition.
+            return CheckConstraint(
+                condition=condition,
+                name=name,
+            )
+        else:
+            return CheckConstraint(
+                check=condition,
+                name=name,
+            )
+
+    @pytest.mark.django_db
+    def test_requires_atomic_false(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAddCheckConstraint(
+            model_name="intmodel",
+            constraint=self._get_check_constraint(
+                condition=Q(int_field__gte=0),
+                name="positive_int",
+            ),
+        )
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # Same for backwards.
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+    @pytest.mark.django_db
+    def test_when_not_a_check_constraint(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        with pytest.raises(
+            ValueError,
+            match="SaferAddCheckConstraint only supports the CheckConstraint class",
+        ):
+            operations.SaferAddCheckConstraint(
+                model_name="intmodel",
+                constraint=UniqueConstraint(  # type: ignore[arg-type]
+                    fields=("int_field",),
+                    name="unique_int_field",
+                ),
+            )
+
+    @pytest.mark.django_db(transaction=True)
+    @override_settings(DATABASE_ROUTERS=[NeverAllow()])
+    def test_when_not_allowed_to_migrate_by_the_router(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddCheckConstraint(
+            model_name="intmodel",
+            constraint=self._get_check_constraint(
+                condition=Q(int_field__gte=0),
+                name="positive_int",
+            ),
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+        # Try the same for the reverse operation:
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+    @pytest.mark.django_db(transaction=True)
+    def test_basic_operation(self):
+        # Prove that the constraint does **not** already exist.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                .format(constraint_name=psycopg_sql.Literal("positive_int"))
+                .as_string(cursor.connection)
+            )
+            assert not cursor.fetchone()
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddCheckConstraint(
+            model_name="intmodel",
+            constraint=self._get_check_constraint(
+                condition=Q(int_field__gte=0),
+                name="positive_int",
+            ),
+        )
+
+        assert operation.describe() == (
+            "Create constraint positive_int on model intmodel. "
+            "Note: Using django_pg_migration_tools SaferAddCheckConstraint "
+            "operation."
+        )
+
+        name, args, kwargs = operation.deconstruct()
+        assert name == "SaferAddCheckConstraint"
+        assert args == []
+        assert kwargs == {"model_name": "intmodel", "constraint": operation.constraint}
+
+        operation.state_forwards(self.app_label, new_state)
+        assert (
+            len(new_state.models[self.app_label, "intmodel"].options["constraints"])
+            == 1
+        )
+        assert (
+            new_state.models[self.app_label, "intmodel"].options["constraints"][0].name
+            == "positive_int"
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 3
+
+        # 1. Check if the constraint is there.
+        assert queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'positive_int';
+            """)
+
+        # 2. Add a not valid constraint
+        assert queries[1]["sql"] == (
+            'ALTER TABLE "example_app_intmodel" ADD CONSTRAINT "positive_int" '
+            'CHECK ("int_field" >= 0) NOT VALID;'
+        )
+
+        # 3. Validate it
+        assert queries[2]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            VALIDATE CONSTRAINT "positive_int";
+        """)
+
+        # Verify that the constraint now exists and is valid.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+                .format(constraint_name=psycopg_sql.Literal("positive_int"))
+                .as_string(cursor.connection)
+            )
+            assert cursor.fetchone()
+
+        # Trying to run the operation again does nothing because the valid
+        # constraint already exists. Only introspection queries are performed.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_run_queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(second_run_queries) == 2
+
+        # 1. Check if the constraint is there.
+        assert second_run_queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'positive_int';
+            """)
+        # 2. Check if it is invalid.
+        assert second_run_queries[1]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_constraint
+            WHERE
+                conname = 'positive_int'
+                AND convalidated IS FALSE;
+            """)
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # 1. Check that the constraint is still there.
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'positive_int';
+            """)
+
+        # 2. perform the ALTER TABLE.
+        assert (
+            reverse_queries[1]["sql"]
+            == 'ALTER TABLE "example_app_intmodel" DROP CONSTRAINT "positive_int"'
+        )
+
+        # Verify the constraint doesn't exist any more.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_CONSTRAINT_EXISTS_QUERY,
+                {
+                    "table_name": "example_app_intmodel",
+                    "constraint_name": "positive_int",
+                },
+            )
+            assert not cursor.fetchone()
+
+        # Verify that a second attempt to revert doesn't do anything because
+        # the constraint has already been removed.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(second_reverse_queries) == 1
+        # Check that the constraint isn't there.
+        assert second_reverse_queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'positive_int';
+            """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_not_valid_constraint_exists(self):
+        with connection.cursor() as cursor:
+            # Make sure a NOT VALID constraint already exists
+            cursor.execute(
+                'ALTER TABLE "example_app_intmodel" ADD CONSTRAINT "positive_int" '
+                'CHECK ("int_field" >= 0) NOT VALID;'
+            )
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddCheckConstraint(
+            model_name="intmodel",
+            constraint=self._get_check_constraint(
+                condition=Q(int_field__gte=0),
+                name="positive_int",
+            ),
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 3
+
+        # 1. Check if the constraint is there.
+        assert queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'positive_int';
+            """)
+
+        # 2. Check if is not valid
+        assert queries[1]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_constraint
+            WHERE
+                conname = 'positive_int'
+                AND convalidated IS FALSE;
+            """)
+
+        # 3. Validate it
+        assert queries[2]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            VALIDATE CONSTRAINT "positive_int";
+        """)
+
+        # Revert!
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # 1. Check that the constraint is still there.
+        assert queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'positive_int';
+            """)
+
+        # 2. perform the ALTER TABLE.
+        assert (
+            reverse_queries[1]["sql"]
+            == 'ALTER TABLE "example_app_intmodel" DROP CONSTRAINT "positive_int"'
+        )
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddCheckConstraint(
+            model_name="intmodel",
+            constraint=self._get_check_constraint(
+                condition=Q(int_field__gte=0),
+                name="positive_int",
+            ),
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 0
+
+        assert len(editor.collected_sql) == 2
+
+        # 1. Add a not valid constraint
+        assert editor.collected_sql[0] == (
+            'ALTER TABLE "example_app_intmodel" ADD CONSTRAINT "positive_int" '
+            'CHECK ("int_field" >= 0) NOT VALID;'
+        )
+
+        # 2. Validate it
+        assert editor.collected_sql[1] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            VALIDATE CONSTRAINT "positive_int";
         """)
