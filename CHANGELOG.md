@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.15] - 2024-12-19
+
 ### Changed
 
 - The `migrate_with_timeouts` command now acquires a session-level advisory
