@@ -12,6 +12,10 @@ DATABASES = {
         default="postgres://postgres:postgres@localhost/django_pg_migration_tools",
     ),
 }
+# "secondary" is just an alias to serve multiple connections for tests
+# that need it.
+DATABASES["secondary"] = DATABASES["default"]
+
 SECRET_KEY = "test-secret-key"
 INSTALLED_APPS = [
     "tests.example_app",

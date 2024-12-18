@@ -25,13 +25,14 @@ class TestMigrateWithTimeoutsCommand:
                 statement_timeout_in_ms=100_000,
             )
 
-        assert queries[0]["sql"] == "SHOW lock_timeout"
-        assert queries[1]["sql"] == "SET SESSION lock_timeout = '50000ms'"
-        assert queries[2]["sql"] == "SHOW statement_timeout"
-        assert queries[3]["sql"] == "SET SESSION statement_timeout = '100000ms'"
-        assert queries[4]["sql"] == "SET SESSION lock_timeout = '0'"
-        assert queries[5]["sql"] == "SET SESSION statement_timeout = '0'"
-        assert len(queries) == 6
+        assert queries[0]["sql"] == "SELECT pg_try_advisory_lock(8967004653001705610);"
+        assert queries[1]["sql"] == "SHOW lock_timeout"
+        assert queries[2]["sql"] == "SET SESSION lock_timeout = '50000ms'"
+        assert queries[3]["sql"] == "SHOW statement_timeout"
+        assert queries[4]["sql"] == "SET SESSION statement_timeout = '100000ms'"
+        assert queries[5]["sql"] == "SET SESSION lock_timeout = '0'"
+        assert queries[6]["sql"] == "SET SESSION statement_timeout = '0'"
+        assert len(queries) == 7
 
     @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
     @pytest.mark.django_db(transaction=True)
@@ -61,10 +62,11 @@ class TestMigrateWithTimeoutsCommand:
                 lock_timeout_in_ms=50_000,
             )
 
-        assert queries[0]["sql"] == "SHOW lock_timeout"
-        assert queries[1]["sql"] == "SET SESSION lock_timeout = '50000ms'"
-        assert queries[2]["sql"] == "SET SESSION lock_timeout = '0'"
-        assert len(queries) == 3
+        assert queries[0]["sql"] == "SELECT pg_try_advisory_lock(8967004653001705610);"
+        assert queries[1]["sql"] == "SHOW lock_timeout"
+        assert queries[2]["sql"] == "SET SESSION lock_timeout = '50000ms'"
+        assert queries[3]["sql"] == "SET SESSION lock_timeout = '0'"
+        assert len(queries) == 4
 
     @mock.patch("django.core.management.commands.migrate.Command.handle", autospec=True)
     @pytest.mark.django_db(transaction=True)
@@ -75,10 +77,11 @@ class TestMigrateWithTimeoutsCommand:
                 statement_timeout_in_ms=50_000,
             )
 
-        assert queries[0]["sql"] == "SHOW statement_timeout"
-        assert queries[1]["sql"] == "SET SESSION statement_timeout = '50000ms'"
-        assert queries[2]["sql"] == "SET SESSION statement_timeout = '0'"
-        assert len(queries) == 3
+        assert queries[0]["sql"] == "SELECT pg_try_advisory_lock(8967004653001705610);"
+        assert queries[1]["sql"] == "SHOW statement_timeout"
+        assert queries[2]["sql"] == "SET SESSION statement_timeout = '50000ms'"
+        assert queries[3]["sql"] == "SET SESSION statement_timeout = '0'"
+        assert len(queries) == 4
 
     def test_interface(self):
         """
@@ -203,6 +206,21 @@ class TestMigrateWithTimeoutsCommand:
                 lock_timeout_in_ms=50_000,
                 lock_timeout_max_retries=2,
                 retry_callback_path=f"{__name__}.example_callback",
+            )
+
+
+class TestLocking:
+    @pytest.mark.django_db(databases=["default", "secondary"])
+    def test_lock_timeout_is_raised(self) -> None:
+        migrate_with_timeouts.Locking().acquire_advisory_session_lock(
+            using="default", value="value"
+        )
+        with pytest.raises(migrate_with_timeouts.LockAlreadyAcquired):
+            migrate_with_timeouts.Locking().acquire_advisory_session_lock(
+                # Secondary is just an alias to "default", so it will
+                # try to acquire the already acquired session-level lock.
+                using="secondary",
+                value="value",
             )
 
 
