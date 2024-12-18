@@ -142,6 +142,7 @@ typing-extensions==4.12.2
     #   django-stubs
     #   django-stubs-ext
     #   mypy
+    #   psycopg
 urllib3==2.2.3
     # via requests
 virtualenv==20.28.0
