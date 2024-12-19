@@ -22,6 +22,7 @@ Install from pypi::
    :maxdepth: 3
    :caption: Contents
 
-   usage/timeouts
-   usage/operations
+   usage/indexes
    usage/management_commands
+   usage/operations
+   usage/timeouts
