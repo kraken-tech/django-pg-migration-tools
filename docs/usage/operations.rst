@@ -6,6 +6,7 @@ Provides custom migration operations that help developers perform idempotent and
 Class Definitions
 -----------------
 
+.. _safer_add_index_concurrently:
 .. py:class:: SaferAddIndexConcurrently(model_name: str, index: models.Index)
 
     Performs CREATE INDEX CONCURRENTLY IF NOT EXISTS without a lock_timeout
