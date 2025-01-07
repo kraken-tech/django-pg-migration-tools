@@ -510,7 +510,7 @@ Class Definitions
 
     :param model_name: Model name in lowercase without underscores.
     :type model_name: str
-    :param name: The column name to be set as not null.
+    :param name: The column name for the new foreign key.
     :type name: str
     :param field: The foreign key field that is being added.
     :type field: models.ForeignKey
@@ -564,9 +564,9 @@ Class Definitions
       DEFERRABLE INITIALLY DEFERRED
       NOT VALID;
 
-      -- This query will take a ShareUpdateExclusive lock on the foo table does
-      -- not block reads nor writes), and a RowShare lock on the bar table
-      -- (does not block reads nor writes).
+      -- This query will take a ShareUpdateExclusive lock on the foo table
+      -- (does not block reads nor writes), and a RowShare lock on the bar
+      -- table (does not block reads nor writes).
       ALTER TABLE foo VALIDATE CONSTRAINT fk_post_bar;
 
     **NOTE**: Additional queries that are triggered by this operation to
