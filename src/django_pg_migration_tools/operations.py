@@ -1134,6 +1134,7 @@ class ForeignKeyManager(base_operations.Operation):
         model_name: str,
         column_name: str,
         field: models.ForeignKey[models.Model],
+        unique: bool,
     ) -> None:
         if not field.null:
             # Validate at initialisation, rather than wasting time later.
@@ -1145,8 +1146,13 @@ class ForeignKeyManager(base_operations.Operation):
         self.to_state = to_state
         self.model = model
         self.model_name = model_name
+        self.original_column_name = column_name
         # mimic Django behaviour of adding an "_id" suffix for fks.
         self.column_name = f"{column_name}_id"
+        self.unique = unique
+        self.unique_constraint_name = build_postgres_identifier(
+            [self.model_name, self.column_name], suffix="uniq"
+        )
         self.field = field
         self.table_name = model._meta.db_table
         self.constraint_name = build_postgres_identifier(
@@ -1201,13 +1207,25 @@ class ForeignKeyManager(base_operations.Operation):
 
         if not self._column_exists():
             self._alter_table_add_null_column()
+            self._maybe_create_unique_constraint()
             self._maybe_create_index()
             self._alter_table_add_not_valid_fk()
             self._alter_table_validate_constraint()
             return
 
+        if self.unique:
+            # The below function calls the SafeConstraintOperationManager,
+            # which handles idempotency and reentrancy already. We don't have
+            # to repeat those checks such as "does the constraint exist?" here
+            # as they would add extra introspection queries unnecessarily.
+            self._maybe_create_unique_constraint()
+
         assert hasattr(self.field, "db_index")
-        if self.field.db_index and not self._valid_index_exists():
+        if (
+            self.field.db_index
+            and (not self.unique)
+            and (not self._valid_index_exists())
+        ):
             self._maybe_create_index()
             self._alter_table_add_not_valid_fk()
             self._alter_table_validate_constraint()
@@ -1291,6 +1309,12 @@ class ForeignKeyManager(base_operations.Operation):
         )
 
     def _maybe_create_index(self) -> None:
+        if self.unique:
+            # If we already have a unique constraint, another index is
+            # redundant given that unique constraints are implemented and can
+            # be used as indexes by Postgres.
+            return
+
         assert hasattr(self.field, "db_index")
         if self.field.db_index:
             SafeIndexOperationManager().safer_create_index(
@@ -1301,6 +1325,22 @@ class ForeignKeyManager(base_operations.Operation):
                 index=self.index_builder,
                 model=self.model,
                 unique=False,
+            )
+
+    def _maybe_create_unique_constraint(self) -> None:
+        if self.unique:
+            to_model = self.to_state.apps.get_model(self.app_label, self.model_name)
+            SafeConstraintOperationManager().create_unique_constraint(
+                app_label=self.app_label,
+                schema_editor=self.schema_editor,
+                from_state=self.from_state,
+                to_state=self.to_state,
+                model=to_model,
+                raise_if_exists=False,
+                constraint=models.UniqueConstraint(
+                    fields=(self.original_column_name,),
+                    name=self.unique_constraint_name,
+                ),
             )
 
     def _constraint_exists(self) -> bool:
@@ -1372,6 +1412,7 @@ class SaferAddFieldForeignKey(operation_fields.AddField):
             model_name=self.model_name,
             column_name=self.name,
             field=cast(models.ForeignKey[models.Model], self.field),
+            unique=False,
         ).add_fk_field()
 
     def database_backwards(
@@ -1390,6 +1431,7 @@ class SaferAddFieldForeignKey(operation_fields.AddField):
             model_name=self.model_name,
             column_name=self.name,
             field=cast(models.ForeignKey[models.Model], self.field),
+            unique=False,
         ).drop_fk_field()
 
     def describe(self) -> str:
@@ -1397,6 +1439,69 @@ class SaferAddFieldForeignKey(operation_fields.AddField):
         return (
             f"{base}. Note: Using django_pg_migration_tools "
             f"SaferAddFieldForeignKey operation."
+        )
+
+
+class SaferAddFieldOneToOne(operation_fields.AddField):
+    """
+    Django's OneToOneField behaves the same way as a ForeignKey. Except that
+    as an addition, the FK field also contains a unique constraint.
+    """
+
+    def __init__(
+        self,
+        model_name: str,
+        name: str,
+        field: models.OneToOneField[models.Model],
+        preserve_default: bool = True,
+    ) -> None:
+        if field.primary_key:
+            raise ValueError("SaferAddFieldOneToOne does not support primary_key=True.")
+        super().__init__(model_name, name, field, preserve_default)
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        ForeignKeyManager(
+            app_label,
+            schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            model_name=self.model_name,
+            column_name=self.name,
+            field=cast(models.ForeignKey[models.Model], self.field),
+            unique=True,
+        ).add_fk_field()
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        ForeignKeyManager(
+            app_label,
+            schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            model_name=self.model_name,
+            column_name=self.name,
+            field=cast(models.ForeignKey[models.Model], self.field),
+            unique=True,
+        ).drop_fk_field()
+
+    def describe(self) -> str:
+        base = super().describe()
+        return (
+            f"{base}. Note: Using django_pg_migration_tools "
+            f"SaferAddFieldOneToOne operation."
         )
 
 
