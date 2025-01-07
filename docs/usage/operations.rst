@@ -458,7 +458,7 @@ Class Definitions
     **NOTE**: Additional queries triggered by this operation to guarantee
     idempotency have been omitted from the snippet above. The key take away is
     that if this migration fails, it can be attempted again and it will pick up
-    from where it has left.
+    from where it has left off (reentrancy).
 
     How to use
     ----------
@@ -572,7 +572,7 @@ Class Definitions
     **NOTE**: Additional queries that are triggered by this operation to
     guarantee idempotency have been omitted from the snippet above. The key
     take away is that if this migration fails, it can be attempted again and it
-    will pick up from where it has left (reentrancy).
+    will pick up from where it has left off (reentrancy).
 
     **NOTE 2**: If you want to add a ``NOT NULL`` constraint after you have
     backfilled the table, you can use the ``SaferAlterFieldSetNotNull``
@@ -722,5 +722,134 @@ Class Definitions
                        condition=models.Q(bar__gte=0),
                        name="bar_not_negative"
                    ),
+              ),
+          ]
+
+
+.. py:class:: SaferAddFieldOneToOne(model_name: str, name: str, field: models.OneToOneField)
+
+    Provides a safer way to add a one-to-one field to an existing model
+
+    :param model_name: Model name in lowercase without underscores.
+    :type model_name: str
+    :param name: The column name for the new one-to-one field.
+    :type name: str
+    :param field: The one-to-one field that is being added.
+    :type field: models.OneToOneField
+
+    **Why use this SaferAddFieldOneToOne operation?**
+    -------------------------------------------------
+
+    When using Django's default ``AddField`` operation, the SQL created has the
+    following form:
+
+    .. code-block:: sql
+
+      BEGIN;
+      --
+      -- Add field foo to bar
+      --
+      ALTER TABLE "myapp_bar"
+      ADD COLUMN "foo_id" bigint NULL
+      UNIQUE CONSTRAINT "auto_gen_constraint_name"
+      REFERENCES "myapp_foo"("id")
+      DEFERRABLE INITIALLY DEFERRED;
+
+      SET CONSTRAINTS "auto_gen_constraint_name" IMMEDIATE;
+      COMMIT;
+
+
+    The ``ALTER TABLE`` command takes an AccessExclusive lock, which is the
+    highest level of locking. It will block reads and writes on the table.
+    At the same time, Postgres will serially create the constraint while that
+    lock is held, which can potentially take a long time.
+
+    The below are the queries executed by this operation in order to avoid the
+    two problems above:
+
+    .. code-block:: sql
+
+      -- This operation takes an AccessExclusiveLock, but for a very short
+      -- duration. Adding a nullable field in Postgres doesn't require a full
+      -- table scan starting on version 11.
+      ALTER TABLE "myapp_bar" ADD COLUMN IF NOT EXISTS "foo_id" bigint NULL;
+
+      -- This operation takes an ShareUpdateExclusiveLock. It won't block
+      -- reads or writes on the table.
+      SET lock_timeout TO '0';
+      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "bar_foo_id_uniq" ON "myapp_bar" ("foo_id");
+      SET lock_timeout TO '10s';
+
+      -- This operation takes an AccessExclusiveLock, but for a very short
+      -- duration as it leverages the unique constraint index above to create
+      -- the constraint.
+      ALTER TABLE "myapp_bar" ADD CONSTRAINT "bar_foo_id_uniq" UNIQUE USING INDEX "bar_foo_id_uniq";
+
+      -- This operation will take a ShareRowExclusive lock on **both** the foo
+      -- table and the bar table. This will not block reads, but it
+      -- will block insert, updates, and deletes. This will only happen for a
+      -- short time, as this operation won't need to scan the whole table.
+      ALTER TABLE "myapp_bar"
+      ADD CONSTRAINT "myapp_bar_foo_id_fk" FOREIGN KEY ("foo_id")
+      REFERENCES "myapp_foo" ("id")
+      DEFERRABLE INITIALLY DEFERRED
+      NOT VALID;
+
+      -- This query will take a ShareUpdateExclusive lock on the foo table
+      -- (does not block reads nor writes), and a RowShare lock on the bar
+      -- table (does not block reads nor writes).
+      ALTER TABLE foo VALIDATE CONSTRAINT fk_post_bar;
+
+    **NOTE**: Additional queries that are triggered by this operation to
+    guarantee idempotency have been omitted from the snippet above. The key
+    take away is that if this migration fails, it can be attempted again and it
+    will pick up from where it has left off (reentrancy).
+
+    **NOTE 2**: If you want to add a ``NOT NULL`` constraint after you have
+    backfilled the table, you can use the ``SaferAlterFieldSetNotNull``
+    operation.
+
+    How to use
+    ----------
+
+    1. Add a new OneToOneField to your model
+
+    .. code-block:: diff
+
+      +    foo = models.OneToOneField(Foo, null=True, on_delete=models.CASCADE)
+
+    2. Make the new migration:
+
+    .. code-block:: bash
+
+      ./manage.py makemigrations
+
+    3. The only changes you need to perform are:
+
+       1. Swap Django's ``AddField`` for this package's
+          ``SaferAddFieldOneToOne`` operation.
+       2. Use a non-atomic migration.
+
+    .. code-block:: diff
+
+      + from django_pg_migration_tools import operations
+      from django.db import migrations
+
+
+      class Migration(migrations.Migration):
+      +   atomic = False
+
+          dependencies = [("myapp", "0042_dependency")]
+
+          operations = [
+      -        migrations.AddField(
+      +        operations.SaferAddFieldOneToOne(
+                  model_name="bar",
+                  name="foo",
+                  field=models.OneToOneField(
+                      null=True,
+                      on_delete=django.db.models.deletion.CASCADE,
+                      to='myapp.foo',
+                  ),
               ),
           ]
