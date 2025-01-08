@@ -11,6 +11,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 ### Added
 
 - A new type of index `UniqueIndex` that also accepts conditions.
+- A new operation to add one-to-one fields in a safer way:
+  `SaferAddFieldOneToOne`.
 
 ## [0.1.15] - 2024-12-19
 
