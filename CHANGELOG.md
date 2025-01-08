@@ -8,6 +8,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- A new type of index `UniqueIndex` that also accepts conditions.
+
 ## [0.1.15] - 2024-12-19
 
 ### Changed
