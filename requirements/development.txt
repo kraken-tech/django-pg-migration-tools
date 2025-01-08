@@ -2,7 +2,7 @@
 #    uv pip compile pyproject.toml --resolver=backtracking --extra=dev --output-file=requirements/development.txt
 alabaster==1.0.0
     # via sphinx
-argcomplete==3.5.2
+argcomplete==3.5.3
     # via nox
 asgiref==3.8.1
     # via
@@ -16,11 +16,11 @@ certifi==2024.12.14
     # via requests
 cfgv==3.4.0
     # via pre-commit
-charset-normalizer==3.4.0
+charset-normalizer==3.4.1
     # via requests
 colorlog==6.9.0
     # via nox
-coverage==7.6.9
+coverage==7.6.10
     # via django-pg-migration-tools (pyproject.toml)
 distlib==0.3.9
     # via virtualenv
@@ -40,11 +40,11 @@ docutils==0.21.2
     # via
     #   sphinx
     #   sphinx-rtd-theme
-environs==11.2.1
+environs==14.0.0
     # via django-pg-migration-tools (pyproject.toml)
 filelock==3.16.1
     # via virtualenv
-identify==2.6.3
+identify==2.6.5
     # via pre-commit
 idna==3.10
     # via requests
@@ -52,13 +52,13 @@ imagesize==1.4.1
     # via sphinx
 iniconfig==2.0.0
     # via pytest
-jinja2==3.1.4
+jinja2==3.1.5
     # via sphinx
 markupsafe==3.0.2
     # via jinja2
-marshmallow==3.23.1
+marshmallow==3.24.1
     # via environs
-mypy==1.13.0
+mypy==1.14.1
     # via django-pg-migration-tools (pyproject.toml)
 mypy-extensions==1.0.0
     # via mypy
@@ -85,7 +85,7 @@ psycopg==3.2.3
     # via django-pg-migration-tools (pyproject.toml)
 psycopg-binary==3.2.3
     # via psycopg
-pygments==2.18.0
+pygments==2.19.1
     # via sphinx
 pyproject-hooks==1.2.0
     # via build
@@ -103,7 +103,7 @@ regex==2024.11.6
     # via sphinx-lint
 requests==2.32.3
     # via sphinx
-ruff==0.8.3
+ruff==0.8.6
     # via django-pg-migration-tools (pyproject.toml)
 snowballstemmer==2.2.0
     # via sphinx
@@ -134,7 +134,7 @@ sqlparse==0.5.3
     # via django
 types-psycopg2==2.9.21.20241019
     # via django-pg-migration-tools (pyproject.toml)
-types-pyyaml==6.0.12.20240917
+types-pyyaml==6.0.12.20241230
     # via django-stubs
 typing-extensions==4.12.2
     # via
@@ -142,10 +142,9 @@ typing-extensions==4.12.2
     #   django-stubs
     #   django-stubs-ext
     #   mypy
-    #   psycopg
-urllib3==2.2.3
+urllib3==2.3.0
     # via requests
-virtualenv==20.28.0
+virtualenv==20.28.1
     # via
     #   nox
     #   pre-commit
