@@ -368,7 +368,8 @@ Class Definitions
     - Having a custom backward operation that will add the constraint back
       without blocking any reads/writes by creating a unique index concurrently
       first and using it to recreate the constraint. This is achieved through
-      the same strategy of py:class:`SaferAddIndexConcurrently`.
+      the same strategy of
+      :ref:`SaferAddIndexConcurrently <safer_add_index_concurrently>`.
 
     How to use
     ----------
