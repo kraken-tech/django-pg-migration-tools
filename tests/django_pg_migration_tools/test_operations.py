@@ -2024,7 +2024,7 @@ class TestSaferAlterFieldSetNotNull:
         """)
 
 
-class TestSaferSaferAddFieldForeignKey:
+class TestSaferAddFieldForeignKey:
     app_label = "example_app"
 
     @pytest.mark.django_db
