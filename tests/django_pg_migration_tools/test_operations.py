@@ -1,7 +1,6 @@
 from textwrap import dedent
 from typing import Any
 
-import django
 import pytest
 from django.db import (
     NotSupportedError,
@@ -12,7 +11,7 @@ from django.db.migrations.state import (
     ModelState,
     ProjectState,
 )
-from django.db.models import BaseConstraint, CheckConstraint, Index, Q, UniqueConstraint
+from django.db.models import BaseConstraint, Index, Q, UniqueConstraint
 from django.test import override_settings, utils
 
 from django_pg_migration_tools import operations
@@ -24,6 +23,7 @@ from tests.example_app.models import (
     ModelWithForeignKey,
     NotNullIntFieldModel,
     NullIntFieldModel,
+    get_check_constraint,
 )
 
 
@@ -3180,21 +3180,6 @@ class TestSaferAddFieldForeignKey:
 class TestSaferAddCheckConstraint:
     app_label = "example_app"
 
-    def _get_check_constraint(self, condition: Q, name: str) -> CheckConstraint:
-        if django.VERSION >= (5, 1):
-            # https://docs.djangoproject.com/en/5.1/releases/5.1/
-            # The check keyword argument of CheckConstraint is deprecated in
-            # favor of condition.
-            return CheckConstraint(
-                condition=condition,
-                name=name,
-            )
-        else:
-            return CheckConstraint(
-                check=condition,
-                name=name,
-            )
-
     @pytest.mark.django_db
     def test_requires_atomic_false(self):
         project_state = ProjectState()
@@ -3202,7 +3187,7 @@ class TestSaferAddCheckConstraint:
         new_state = project_state.clone()
         operation = operations.SaferAddCheckConstraint(
             model_name="intmodel",
-            constraint=self._get_check_constraint(
+            constraint=get_check_constraint(
                 condition=Q(int_field__gte=0),
                 name="positive_int",
             ),
@@ -3245,7 +3230,7 @@ class TestSaferAddCheckConstraint:
 
         operation = operations.SaferAddCheckConstraint(
             model_name="intmodel",
-            constraint=self._get_check_constraint(
+            constraint=get_check_constraint(
                 condition=Q(int_field__gte=0),
                 name="positive_int",
             ),
@@ -3288,7 +3273,7 @@ class TestSaferAddCheckConstraint:
 
         operation = operations.SaferAddCheckConstraint(
             model_name="intmodel",
-            constraint=self._get_check_constraint(
+            constraint=get_check_constraint(
                 condition=Q(int_field__gte=0),
                 name="positive_int",
             ),
@@ -3438,7 +3423,7 @@ class TestSaferAddCheckConstraint:
 
         operation = operations.SaferAddCheckConstraint(
             model_name="intmodel",
-            constraint=self._get_check_constraint(
+            constraint=get_check_constraint(
                 condition=Q(int_field__gte=0),
                 name="positive_int",
             ),
@@ -3503,7 +3488,7 @@ class TestSaferAddCheckConstraint:
 
         operation = operations.SaferAddCheckConstraint(
             model_name="intmodel",
-            constraint=self._get_check_constraint(
+            constraint=get_check_constraint(
                 condition=Q(int_field__gte=0),
                 name="positive_int",
             ),
