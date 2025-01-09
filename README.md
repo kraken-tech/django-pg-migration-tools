@@ -12,6 +12,7 @@ Tools to make Django migrations safer and more scalable.
   - [Adding unique constraints](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferAddUniqueConstraint)
   - [Removing unique constraints](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferRemoveUniqueConstraint)
   - [Adding check constraints](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferAddCheckConstraint)
+  - [Removing check constraints](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferRemoveCheckConstraint)
   - [Adding indexes (concurrently)](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferAddIndexConcurrently)
   - [Removing indexes (concurrently)](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferRemoveIndexConcurrently)
   - [Setting a column to NOT NULL](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferAlterFieldSetNotNull)
