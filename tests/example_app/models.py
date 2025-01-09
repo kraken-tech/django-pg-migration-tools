@@ -61,3 +61,13 @@ class NotNullIntFieldModel(models.Model):
 
 class CharIDModel(models.Model):
     id = models.CharField(max_length=42, primary_key=True)
+
+
+class ModelWithCheckConstraint(models.Model):
+    class Meta:
+        constraints = (
+            get_check_constraint(
+                condition=models.Q(id=42),
+                name="id_must_be_42",
+            ),
+        )

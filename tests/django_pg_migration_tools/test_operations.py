@@ -20,6 +20,7 @@ from tests.example_app.models import (
     CharIDModel,
     CharModel,
     IntModel,
+    ModelWithCheckConstraint,
     ModelWithForeignKey,
     NotNullIntFieldModel,
     NullIntFieldModel,
@@ -4248,4 +4249,264 @@ class TestSaferSaferAddFieldOneToOne:
             WHERE
                 attrelid = 'example_app_intmodel'::regclass
                 AND attname = 'char_id_model_field_id';
+        """)
+
+
+class TestSaferRemoveCheckConstraint:
+    app_label = "example_app"
+
+    @pytest.mark.django_db
+    def test_requires_atomic_false(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(ModelWithCheckConstraint))
+        new_state = project_state.clone()
+        operation = operations.SaferRemoveCheckConstraint(
+            model_name="modelwithcheckconstraint", name="id_must_be_42"
+        )
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # Same for backwards.
+        with pytest.raises(NotSupportedError):
+            with connection.schema_editor(atomic=True) as editor:
+                operation.database_backwards(
+                    self.app_label, editor, new_state, project_state
+                )
+
+    @pytest.mark.django_db(transaction=True)
+    @override_settings(DATABASE_ROUTERS=[NeverAllow()])
+    def test_when_not_allowed_to_migrate_by_the_router(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(ModelWithCheckConstraint))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveCheckConstraint(
+            model_name="modelwithcheckconstraint",
+            name="id_must_be_42",
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+        # Try the same for the reverse operation:
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_backwards(
+                    self.app_label, editor, new_state, project_state
+                )
+
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+    @pytest.mark.django_db(transaction=True)
+    def test_basic_operation(self):
+        # Prove that the constraint already exists
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                .format(constraint_name=psycopg_sql.Literal("id_must_be_42"))
+                .as_string(cursor.connection)
+            )
+            assert cursor.fetchone()
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(ModelWithCheckConstraint))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveCheckConstraint(
+            model_name="modelwithcheckconstraint",
+            name="id_must_be_42",
+        )
+
+        assert operation.describe() == (
+            "Remove constraint id_must_be_42 from model modelwithcheckconstraint. "
+            "Note: Using django_pg_migration_tools SaferRemoveCheckConstraint "
+            "operation."
+        )
+
+        name, args, kwargs = operation.deconstruct()
+        assert name == "SaferRemoveCheckConstraint"
+        assert args == []
+        assert kwargs == {
+            "model_name": "modelwithcheckconstraint",
+            "name": "id_must_be_42",
+        }
+
+        operation.state_forwards(self.app_label, new_state)
+        assert (
+            len(
+                new_state.models[self.app_label, "modelwithcheckconstraint"].options[
+                    "constraints"
+                ]
+            )
+            == 0
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        # 1. Check that the constraint is still there.
+        assert queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'id_must_be_42';
+            """)
+
+        # 2. perform the ALTER TABLE.
+        assert (
+            queries[1]["sql"]
+            == 'ALTER TABLE "example_app_modelwithcheckconstraint" DROP CONSTRAINT "id_must_be_42"'
+        )
+
+        # Verify that the constraint was removed.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                .format(constraint_name=psycopg_sql.Literal("id_must_be_42"))
+                .as_string(cursor.connection)
+            )
+            assert not cursor.fetchone()
+
+        # Trying to run the operation again does nothing because the constraint
+        # was already removed.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_run_queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(second_run_queries) == 1
+
+        # 1. Check if the constraint is there.
+        assert second_run_queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'id_must_be_42';
+            """)
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, new_state, project_state
+                )
+
+        assert len(reverse_queries) == 3
+
+        # 1. Check if the constraint is there.
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'id_must_be_42';
+            """)
+
+        # 2. Add a not valid constraint
+        assert reverse_queries[1]["sql"] == (
+            'ALTER TABLE "example_app_modelwithcheckconstraint" ADD CONSTRAINT "id_must_be_42" '
+            'CHECK ("id" = 42) NOT VALID;'
+        )
+
+        # 3. Validate it
+        assert reverse_queries[2]["sql"] == dedent("""
+            ALTER TABLE "example_app_modelwithcheckconstraint"
+            VALIDATE CONSTRAINT "id_must_be_42";
+        """)
+
+        # Verify the constraint is there now
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+                .format(constraint_name=psycopg_sql.Literal("id_must_be_42"))
+                .as_string(cursor.connection)
+            )
+            assert cursor.fetchone()
+
+        # Verify that a second attempt to revert doesn't do anything because
+        # the constraint has already been added.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, new_state, project_state
+                )
+
+        assert len(second_reverse_queries) == 2
+        assert second_reverse_queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'id_must_be_42';
+            """)
+        assert second_reverse_queries[1]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_constraint
+            WHERE
+                conname = 'id_must_be_42'
+                AND convalidated IS FALSE;
+            """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(ModelWithCheckConstraint))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveCheckConstraint(
+            model_name="modelwithcheckconstraint",
+            name="id_must_be_42",
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        assert len(queries) == 0
+        assert len(editor.collected_sql) == 1
+
+        # Introspection queries are ommited from sqlmigrate output.
+        assert (
+            editor.collected_sql[0]
+            == 'ALTER TABLE "example_app_modelwithcheckconstraint" DROP CONSTRAINT "id_must_be_42";'
+        )
+
+        # Verify that the constraint is still there because we are only
+        # collecting sql statements and nothing has been deleted for real.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+                .format(constraint_name=psycopg_sql.Literal("id_must_be_42"))
+                .as_string(cursor.connection)
+            )
+            assert cursor.fetchone()
+
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, new_state, project_state
+                )
+
+        assert len(reverse_queries) == 0
+        assert len(editor.collected_sql) == 2
+
+        assert (
+            editor.collected_sql[0]
+            == 'ALTER TABLE "example_app_modelwithcheckconstraint" ADD CONSTRAINT "id_must_be_42" CHECK ("id" = 42) NOT VALID;'
+        )
+
+        assert editor.collected_sql[1] == dedent("""
+            ALTER TABLE "example_app_modelwithcheckconstraint"
+            VALIDATE CONSTRAINT "id_must_be_42";
         """)

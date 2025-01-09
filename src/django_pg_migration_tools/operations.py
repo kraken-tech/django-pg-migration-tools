@@ -1632,3 +1632,55 @@ class SaferAddCheckConstraint(operation_models.AddConstraint):
             f"{base}. Note: Using django_pg_migration_tools "
             f"SaferAddCheckConstraint operation."
         )
+
+
+class SaferRemoveCheckConstraint(operation_models.RemoveConstraint):
+    name: str
+    model_name: str
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        from_model_state = from_state.models[app_label, self.model_name_lower]
+        constraint: models.CheckConstraint = from_model_state.get_constraint_by_name(
+            self.name
+        )
+        SafeConstraintOperationManager().drop_check_constraint(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            constraint=constraint,
+        )
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        to_model_state = to_state.models[app_label, self.model_name_lower]
+        constraint: models.CheckConstraint = to_model_state.get_constraint_by_name(
+            self.name
+        )
+        SafeConstraintOperationManager().create_check_constraint(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            constraint=constraint,
+        )
+
+    def describe(self) -> str:
+        base = super().describe()
+        return (
+            f"{base}. Note: Using django_pg_migration_tools "
+            f"SaferRemoveCheckConstraint operation."
+        )
