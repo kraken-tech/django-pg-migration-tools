@@ -528,7 +528,9 @@ class SafeConstraintOperationManager(base_operations.Operation):
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        if not self._constraint_exists(schema_editor, constraint):
+        if not self._constraint_exists(
+            schema_editor, constraint, collect_default=False
+        ):
             self._create_not_valid_check_constraint(constraint, model, schema_editor)
             self._validate_check_constraint(constraint, model, schema_editor)
             return
@@ -552,7 +554,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        if not self._constraint_exists(schema_editor, constraint):
+        if not self._constraint_exists(schema_editor, constraint, collect_default=True):
             # Nothing to delete.
             return
 
@@ -617,12 +619,14 @@ class SafeConstraintOperationManager(base_operations.Operation):
         self,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         constraint: models.UniqueConstraint | models.CheckConstraint,
+        collect_default: bool = False,
     ) -> bool:
         return _run_introspection_query(
             schema_editor,
             psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
             .format(constraint_name=psycopg_sql.Literal(constraint.name))
             .as_string(schema_editor.connection.connection),
+            collect_default=collect_default,
         )
 
     def _not_valid_constraint_exists(
