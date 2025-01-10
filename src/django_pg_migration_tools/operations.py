@@ -1456,6 +1456,59 @@ class SaferAddFieldForeignKey(operation_fields.AddField):
         )
 
 
+class SaferRemoveFieldForeignKey(operation_fields.RemoveField):
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        field = from_state.apps.get_model(app_label, self.model_name)._meta.get_field(
+            self.name
+        )
+        ForeignKeyManager(
+            app_label,
+            schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            model_name=self.model_name,
+            column_name=self.name,
+            field=field,
+            unique=False,
+        ).drop_fk_field()
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        field = to_state.apps.get_model(app_label, self.model_name)._meta.get_field(
+            self.name
+        )
+        ForeignKeyManager(
+            app_label,
+            schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            model_name=self.model_name,
+            column_name=self.name,
+            field=field,
+            unique=False,
+        ).add_fk_field()
+
+    def describe(self) -> str:
+        base = super().describe()
+        return (
+            f"{base}. Note: Using django_pg_migration_tools "
+            f"SaferRemoveFieldForeignKey operation."
+        )
+
+
 class SaferAddFieldOneToOne(operation_fields.AddField):
     """
     Django's OneToOneField behaves the same way as a ForeignKey. Except that
