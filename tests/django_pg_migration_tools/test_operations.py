@@ -2194,7 +2194,7 @@ class TestSaferAddFieldForeignKey:
                 )
         assert len(second_reverse_queries) == 1
 
-        assert reverse_queries[0]["sql"] == dedent("""
+        assert second_reverse_queries[0]["sql"] == dedent("""
             SELECT 1
             FROM pg_catalog.pg_attribute
             WHERE
