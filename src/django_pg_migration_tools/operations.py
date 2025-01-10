@@ -1262,12 +1262,12 @@ class ForeignKeyManager(base_operations.Operation):
         ):
             return
 
-        if not self._column_exists():
+        if not self._column_exists(collect_default=True):
             return
 
         self._alter_table_drop_column()
 
-    def _column_exists(self) -> bool:
+    def _column_exists(self, collect_default: bool = False) -> bool:
         return _run_introspection_query(
             self.schema_editor,
             psycopg_sql.SQL(ColumnQueries.CHECK_COLUMN_EXISTS)
@@ -1276,6 +1276,7 @@ class ForeignKeyManager(base_operations.Operation):
                 column_name=psycopg_sql.Literal(self.column_name),
             )
             .as_string(self.schema_editor.connection.connection),
+            collect_default=collect_default,
         )
 
     def _get_remote_model(self) -> models.Model:
