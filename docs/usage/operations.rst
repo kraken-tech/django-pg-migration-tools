@@ -517,6 +517,7 @@ Class Definitions
               ),
           ]
 
+.. _safer_add_field_foreign_key:
 .. py:class:: SaferAddFieldForeignKey(model_name: str, name: str, field: models.ForeignKey)
 
     Provides a safer way to add a foreign key field to an existing model
@@ -636,6 +637,73 @@ Class Definitions
               ),
           ]
 
+.. py:class:: SaferRemoveFieldForeignKey(model_name: str, name: str)
+
+    Provides a safer way to remove a foreign key field.
+
+    :param model_name: Model name in lowercase without underscores.
+    :type model_name: str
+    :param name: The column name for the foreign key field to be deleted.
+    :type name: str
+
+    **Why use this SaferRemoveFieldForeignKey operation?**
+    ------------------------------------------------------
+
+    The operation that Django provides (``RemoveField``) has the
+    following limitations:
+
+    1. The operation fails if the field has already been removed (not
+       idempotent).
+    2. When reverting, the alter table statement provided by Django to recreate
+       the foreign key will block reads and writes on the table.
+
+    This custom operation fixes those problems by:
+
+    - Having a custom forward operation that will only attempt to drop the
+      foreign key field if the field exists.
+    - Having a custom backward operation that will add the foreign key back
+      without blocking any reads/writes. This is achieved through the same
+      strategy of :ref:`SaferAddFieldForeignKey <safer_add_field_foreign_key>`.
+
+    How to use
+    ----------
+
+    1. Remove the ForeignKey field from your model:
+
+    .. code-block:: diff
+
+      -    bar = models.ForeignKey(Bar, null=True, on_delete=models.CASCADE)
+
+    2. Make the new migration:
+
+    .. code-block:: bash
+
+      ./manage.py makemigrations
+
+    3. The only changes you need to perform are:
+
+       1. Swap Django's ``RemoveField`` for this package's
+          ``SaferRemoveFieldForeignKey`` operation.
+       2. Use a non-atomic migration.
+
+    .. code-block:: diff
+
+      + from django_pg_migration_tools import operations
+      from django.db import migrations
+
+
+      class Migration(migrations.Migration):
+      +   atomic = False
+
+          dependencies = [("myapp", "0042_dependency")]
+
+          operations = [
+      -        migrations.RemoveField(
+      +        operations.SaferRemoveFieldForeignKey(
+                  model_name="mymodel",
+                  name="bar",
+              ),
+          ]
 
 .. py:class:: SaferAddCheckConstraint(model_name: str, constraint: models.CheckConstraint)
 
