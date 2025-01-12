@@ -28,7 +28,7 @@ Class Definitions
 
     .. code-block:: sql
 
-      CREATE INDEX CONCURRENTLY <idx> ON <table> USING <method>
+      CREATE INDEX CONCURRENTLY <idx> ON <table> USING <method> (<column_name>)
 
     Which has several problems:
 
@@ -65,7 +65,7 @@ Class Definitions
       -- Remove the invalid index (only if the previous query returned one).
       DROP INDEX CONCURRENTLY IF EXISTS foo_idx;
       -- Finally create the index
-      CREATE INDEX CONCURRENTLY IF NOT EXISTS foo_idx ON myapp_mymodel;
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS foo_idx ON myapp_mymodel (column_name);
       -- Reset lock_timeout to its original value ("1s" as an example).
       SET lock_timeout = '1s';
 
@@ -277,7 +277,7 @@ Class Definitions
       DROP INDEX CONCURRENTLY IF EXISTS foo_unique_idx;
 
       -- Finally create the UNIQUE index
-      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS foo_unique_idx ON myapp_mymodel;
+      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS foo_unique_idx ON myapp_mymodel (column_name);
 
       -- Reset lock_timeout to its original value ("1s" as an example).
       SET lock_timeout = '1s';
