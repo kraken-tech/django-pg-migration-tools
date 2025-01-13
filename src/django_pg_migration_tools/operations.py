@@ -455,6 +455,19 @@ class SafeConstraintOperationManager(base_operations.Operation):
         alter_table_sql = base_sql.split(" UNIQUE")[0]
         sql = f'{alter_table_sql} UNIQUE USING INDEX "{index.name}"'
 
+        if constraint.deferrable == models.Deferrable.DEFERRED:
+            sql += " DEFERRABLE INITIALLY DEFERRED"
+        else:
+            # Note that there are only two options for models.Deferrable:
+            # IMMEDIATE or DEFERRED. models.Deferrable.IMMEDIATE is the default
+            # and most common case. DEFERRED is also Postgres default when no
+            # deferrable setting was specified. This means that having an
+            # "else" here that would append "DEFERRABLE INITIALLY IMMEDIATE"
+            # to the query for the "IMMEDIATE" case is not necessary. This
+            # mimics what Django already does, which is to not include that
+            # suffix.
+            pass
+
         # Now we can execute the schema change. We have lock timeouts back in
         # place after creating the index that would prevent this operation from
         # running for too long if it's blocked by another query. Otherwise,

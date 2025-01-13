@@ -23,13 +23,13 @@ django-stubs==5.1.1
     # via django-pg-migration-tools (pyproject.toml)
 django-stubs-ext==5.1.1
     # via django-stubs
-environs==14.0.0
+environs==14.1.0
     # via django-pg-migration-tools (pyproject.toml)
 filelock==3.16.1
     # via virtualenv
 iniconfig==2.0.0
     # via pytest
-marshmallow==3.24.1
+marshmallow==3.25.1
     # via environs
 nox==2024.10.9
     # via django-pg-migration-tools (pyproject.toml)

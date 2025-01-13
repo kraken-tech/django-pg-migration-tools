@@ -285,6 +285,19 @@ Class Definitions
       -- Perform the ALTER TABLE using the unique index just created.
       ALTER TABLE "myapp_mymodel" ADD CONSTRAINT "foo_unique" UNIQUE USING INDEX "foo_unique_idx";
 
+    .. dropdown:: Information about ``deferrable``
+        :color: info
+        :icon: info
+
+        The ``deferrable`` argument of ``UniqueConstraint`` is respected.
+
+        That is, if set to ``models.Deferrable.DEFERRED``, the ``ALTER TABLE``
+        command above will include the suffix ``DEFERRABLE INITIALLY
+        DEFERRED``.
+
+        The other value for ``models.Deferrable`` is ``IMMEDIATE``. No changes
+        are performed on the ``ALTER TABLE`` statement in this case as
+        ``IMMEDIATE`` is the default Postgres behaviour.
 
     How to use
     ----------
