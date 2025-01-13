@@ -134,7 +134,7 @@ class TestSaferAddIndexConcurrently:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
     # Disable the overall test transaction because a concurrent index cannot
@@ -191,7 +191,7 @@ class TestSaferAddIndexConcurrently:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Assert the invalid index has been replaced by a valid index.
@@ -237,7 +237,7 @@ class TestSaferAddIndexConcurrently:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert reverse_queries[0]["sql"] == "SHOW lock_timeout;"
         assert reverse_queries[1]["sql"] == "SET lock_timeout = '0';"
@@ -267,7 +267,7 @@ class TestSaferAddIndexConcurrently:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -317,7 +317,7 @@ class TestSaferAddIndexConcurrently:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -347,7 +347,7 @@ class TestSaferRemoveIndexConcurrently:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
     # Disable the overall test transaction because a concurrent index operation
@@ -410,7 +410,7 @@ class TestSaferRemoveIndexConcurrently:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Prove that the index doesn't exist in the db anymore.
@@ -437,7 +437,7 @@ class TestSaferRemoveIndexConcurrently:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert reverse_queries[0]["sql"] == "SHOW lock_timeout;"
@@ -470,7 +470,7 @@ class TestSaferRemoveIndexConcurrently:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -507,7 +507,7 @@ class TestSaferRemoveIndexConcurrently:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -541,14 +541,14 @@ class TestSaferAddUniqueConstraint:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Same for backwards.
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
     # Disable the overall test transaction because a unique concurrent index
@@ -617,11 +617,12 @@ class TestSaferAddUniqueConstraint:
             == "unique_int_field"
         )
 
+        operation.state_forwards(self.app_label, new_state)
         # Proceed to add the unique index followed by the constraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Assert the index exists. Note that both index and constraint are
@@ -699,7 +700,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # 1. Check that the constraint is still there.
@@ -731,7 +732,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert len(second_reverse_queries) == 1
@@ -777,11 +778,12 @@ class TestSaferAddUniqueConstraint:
                 name="unique_int_field",
             ),
         )
+        operation.state_forwards(self.app_label, new_state)
         # Proceed to add the unique index followed by the constraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         with connection.cursor() as cursor:
@@ -844,7 +846,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # 1. Check that the constraint is still there.
@@ -887,7 +889,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -926,7 +928,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -938,7 +940,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -1090,7 +1092,7 @@ class TestSaferAddUniqueConstraint:
         with pytest.raises(operations.ConstraintAlreadyExists):
             with connection.schema_editor(atomic=False, collect_sql=False) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Drop the constraint. We aren't in a test with transaction, we have
@@ -1121,7 +1123,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 1
 
@@ -1182,11 +1184,12 @@ class TestSaferAddUniqueConstraint:
                 condition=Q(int_field__gte=2),
             ),
         )
+        operation.state_forwards(self.app_label, new_state)
         # Proceed to add the unique index followed by the constraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Confirm that exists as index
@@ -1235,7 +1238,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # 2. perform the ALTER TABLE.
@@ -1298,14 +1301,14 @@ class TestSaferRemoveUniqueConstraint:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Same for backwards.
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
     @pytest.mark.django_db(transaction=True)
@@ -1346,11 +1349,12 @@ class TestSaferRemoveUniqueConstraint:
             == 0
         )
 
+        operation.state_forwards(self.app_label, new_state)
         # Proceed to remove the constraint.
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Prove the constraint is not there any longer.
@@ -1386,7 +1390,7 @@ class TestSaferRemoveUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # These will be the same as when creating a constraint safely. I.e.,
@@ -1457,12 +1461,11 @@ class TestSaferRemoveUniqueConstraint:
         )
 
         operation.state_forwards(self.app_label, new_state)
-
         # Proceed to remove the constraint.
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Prove the index is not there any longer.
@@ -1500,7 +1503,7 @@ class TestSaferRemoveUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # These will be the same as when creating a constraint safely. I.e.,
@@ -1551,7 +1554,7 @@ class TestSaferRemoveUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -1562,7 +1565,7 @@ class TestSaferRemoveUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -1590,7 +1593,7 @@ class TestSaferRemoveUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Checks if the constraint already exists.
@@ -1652,7 +1655,7 @@ class TestSaferAlterFieldSetNotNull:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
     @pytest.mark.django_db(transaction=True)
@@ -1670,7 +1673,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         # No queries have run, because the migration wasn't allowed to run by
         # the router.
@@ -1680,7 +1683,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -1703,10 +1706,11 @@ class TestSaferAlterFieldSetNotNull:
             "django_pg_migration_tools SaferAlterFieldSetNotNull operation."
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 6
 
@@ -1745,7 +1749,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -1768,7 +1772,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(second_reverse_queries) == 1
 
@@ -1795,7 +1799,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -1835,7 +1839,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 2
 
@@ -1873,7 +1877,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 5
 
@@ -1927,7 +1931,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 6
 
@@ -1990,7 +1994,7 @@ class TestSaferAlterFieldSetNotNull:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 4
 
@@ -2027,6 +2031,7 @@ class TestSaferSaferAddFieldForeignKey:
     def test_requires_atomic_false(self):
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2036,13 +2041,14 @@ class TestSaferSaferAddFieldForeignKey:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
     @pytest.mark.django_db(transaction=True)
     def test_when_not_null(self):
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2054,7 +2060,7 @@ class TestSaferSaferAddFieldForeignKey:
         ):
             with connection.schema_editor(atomic=False) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
     @pytest.mark.django_db(transaction=True)
@@ -2062,6 +2068,7 @@ class TestSaferSaferAddFieldForeignKey:
     def test_when_not_allowed_to_migrate_by_the_router(self):
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2072,7 +2079,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         # No queries have run, because the migration wasn't allowed to run by
         # the router.
@@ -2082,7 +2089,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -2098,6 +2105,7 @@ class TestSaferSaferAddFieldForeignKey:
 
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2110,10 +2118,11 @@ class TestSaferSaferAddFieldForeignKey:
             "django_pg_migration_tools SaferAddFieldForeignKey operation."
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 9
 
@@ -2160,7 +2169,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -2181,7 +2190,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(second_reverse_queries) == 1
 
@@ -2197,6 +2206,7 @@ class TestSaferSaferAddFieldForeignKey:
     def test_when_collecting_only(self):
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2206,7 +2216,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -2249,6 +2259,7 @@ class TestSaferSaferAddFieldForeignKey:
 
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2256,10 +2267,11 @@ class TestSaferSaferAddFieldForeignKey:
             field=models.ForeignKey(CharModel, null=True, on_delete=models.CASCADE),
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 9
 
@@ -2310,7 +2322,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -2341,6 +2353,7 @@ class TestSaferSaferAddFieldForeignKey:
 
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2348,10 +2361,11 @@ class TestSaferSaferAddFieldForeignKey:
             field=models.ForeignKey(CharModel, null=True, on_delete=models.CASCADE),
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 5
 
@@ -2391,7 +2405,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -2430,6 +2444,7 @@ class TestSaferSaferAddFieldForeignKey:
 
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2437,10 +2452,11 @@ class TestSaferSaferAddFieldForeignKey:
             field=models.ForeignKey(CharModel, null=True, on_delete=models.CASCADE),
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 5
 
@@ -2480,7 +2496,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -2518,6 +2534,7 @@ class TestSaferSaferAddFieldForeignKey:
 
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2525,10 +2542,11 @@ class TestSaferSaferAddFieldForeignKey:
             field=models.ForeignKey(CharModel, null=True, on_delete=models.CASCADE),
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 4
 
@@ -2564,7 +2582,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -2584,6 +2602,7 @@ class TestSaferSaferAddFieldForeignKey:
     def test_operation_when_db_index_is_false(self):
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2593,10 +2612,11 @@ class TestSaferSaferAddFieldForeignKey:
             ),
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 4
 
@@ -2627,7 +2647,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -2648,7 +2668,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(second_reverse_queries) == 1
 
@@ -2669,6 +2689,7 @@ class TestSaferSaferAddFieldForeignKey:
 
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharIDModel))
         new_state = project_state.clone()
         operation = operations.SaferAddFieldForeignKey(
             model_name="intmodel",
@@ -2676,10 +2697,11 @@ class TestSaferSaferAddFieldForeignKey:
             field=models.ForeignKey(CharIDModel, null=True, on_delete=models.CASCADE),
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 9
 
@@ -2726,7 +2748,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -2747,7 +2769,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(second_reverse_queries) == 1
 
@@ -2775,10 +2797,11 @@ class TestSaferSaferAddFieldForeignKey:
                 db_index=False,
             ),
         )
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 4
 
@@ -2809,7 +2832,7 @@ class TestSaferSaferAddFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -2859,14 +2882,14 @@ class TestSaferAddCheckConstraint:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Same for backwards.
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
     @pytest.mark.django_db
@@ -2903,7 +2926,7 @@ class TestSaferAddCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         # No queries have run, because the migration wasn't allowed to run by
         # the router.
@@ -2913,7 +2936,7 @@ class TestSaferAddCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -2967,7 +2990,7 @@ class TestSaferAddCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 3
@@ -3000,12 +3023,13 @@ class TestSaferAddCheckConstraint:
             )
             assert cursor.fetchone()
 
+        operation.state_forwards(self.app_label, new_state)
         # Trying to run the operation again does nothing because the valid
         # constraint already exists. Only introspection queries are performed.
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_run_queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(second_run_queries) == 2
@@ -3028,7 +3052,7 @@ class TestSaferAddCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # 1. Check that the constraint is still there.
@@ -3060,7 +3084,7 @@ class TestSaferAddCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert len(second_reverse_queries) == 1
@@ -3092,10 +3116,11 @@ class TestSaferAddCheckConstraint:
             ),
         )
 
+        operation.state_forwards(self.app_label, new_state)
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 3
@@ -3126,7 +3151,7 @@ class TestSaferAddCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # 1. Check that the constraint is still there.
@@ -3159,7 +3184,7 @@ class TestSaferAddCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -3195,7 +3220,7 @@ class TestSaferSaferAddFieldOneToOne:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
     @pytest.mark.django_db(transaction=True)
@@ -3213,7 +3238,7 @@ class TestSaferSaferAddFieldOneToOne:
         ):
             with connection.schema_editor(atomic=False) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
     @pytest.mark.django_db(transaction=True)
@@ -3246,7 +3271,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         # No queries have run, because the migration wasn't allowed to run by
         # the router.
@@ -3256,7 +3281,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -3306,7 +3331,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 11
 
@@ -3362,7 +3387,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -3383,7 +3408,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(second_reverse_queries) == 1
 
@@ -3411,7 +3436,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -3470,7 +3495,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 11
 
@@ -3526,7 +3551,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -3574,7 +3599,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 5
 
@@ -3610,7 +3635,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -3666,7 +3691,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 5
 
@@ -3702,7 +3727,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -3757,7 +3782,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 4
 
@@ -3789,7 +3814,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -3823,7 +3848,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         assert len(queries) == 11
 
@@ -3879,7 +3904,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(reverse_queries) == 2
 
@@ -3900,7 +3925,7 @@ class TestSaferSaferAddFieldOneToOne:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(second_reverse_queries) == 1
 
