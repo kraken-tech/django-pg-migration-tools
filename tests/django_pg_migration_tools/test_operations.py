@@ -988,7 +988,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         with connection.cursor() as cursor:
@@ -1043,7 +1043,7 @@ class TestSaferAddUniqueConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # 1. Check that the constraint is still there.
@@ -2041,7 +2041,7 @@ class TestSaferRemoveFieldForeignKey:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
     @pytest.mark.django_db(transaction=True)
@@ -2060,7 +2060,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         # No queries have run, because the migration wasn't allowed to run by
         # the router.
@@ -2070,7 +2070,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -2103,7 +2103,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 2
@@ -2123,7 +2123,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert len(reverse_queries) == 9
@@ -2174,7 +2174,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
         assert len(second_reverse_queries) == 4
         assert second_reverse_queries[0]["sql"] == dedent("""
@@ -2227,7 +2227,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 1
@@ -2243,7 +2243,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert len(reverse_queries) == 9
@@ -2308,7 +2308,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -2322,7 +2322,7 @@ class TestSaferRemoveFieldForeignKey:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert len(reverse_queries) == 0
