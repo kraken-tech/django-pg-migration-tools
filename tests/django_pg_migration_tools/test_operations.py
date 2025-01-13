@@ -946,6 +946,128 @@ class TestSaferAddUniqueConstraint:
         assert len(queries) == 0
 
     @pytest.mark.django_db(transaction=True)
+    def test_when_deferred_set(self):
+        # Prove that:
+        #   - An invalid index doesn't exist.
+        #   - The constraint doesn't exist yet.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.IndexQueries.CHECK_INVALID_INDEX)
+                .format(index_name=psycopg_sql.Literal("unique_int_field"))
+                .as_string(cursor.connection)
+            )
+            assert not cursor.fetchone()
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                .format(constraint_name=psycopg_sql.Literal("unique_int_field"))
+                .as_string(cursor.connection)
+            )
+            assert not cursor.fetchone()
+            # Also, set the lock_timeout to check it has been returned to
+            # its original value once the unique index creation is completed.
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddUniqueConstraint(
+            model_name="intmodel",
+            constraint=UniqueConstraint(
+                fields=("int_field",),
+                name="unique_int_field",
+                deferrable=models.Deferrable.DEFERRED,
+            ),
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+        # Proceed to add the unique index followed by the constraint:
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, project_state, new_state
+                )
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_CONSTRAINT_EXISTS_QUERY,
+                {
+                    "table_name": "example_app_intmodel",
+                    "constraint_name": "unique_int_field",
+                },
+            )
+            assert cursor.fetchone()
+
+        # Assert on the sequence of expected SQL queries:
+        #
+        # 1. Check whether the constraint already exists.
+        assert queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'unique_int_field';
+            """)
+        # 2. Check the original lock_timeout value to be able to restore it
+        # later.
+        assert queries[1]["sql"] == "SHOW lock_timeout;"
+        # 3. Remove the timeout.
+        assert queries[2]["sql"] == "SET lock_timeout = '0';"
+        # 4. Verify if the index is invalid.
+        assert queries[3]["sql"] == dedent("""
+            SELECT relname
+            FROM pg_class, pg_index
+            WHERE (
+                pg_index.indisvalid = false
+                AND pg_index.indexrelid = pg_class.oid
+                AND relname = 'unique_int_field'
+            );
+            """)
+        # 5. Finally create the index concurrently.
+        assert (
+            queries[4]["sql"]
+            == 'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "unique_int_field" ON "example_app_intmodel" ("int_field")'
+        )
+        # 6. Set the timeout back to what it was originally.
+        assert queries[5]["sql"] == "SET lock_timeout = '1s';"
+
+        # 7. Add the table constraint with the DEFERRED option set.
+        assert (
+            queries[6]["sql"]
+            == 'ALTER TABLE "example_app_intmodel" ADD CONSTRAINT "unique_int_field" UNIQUE USING INDEX "unique_int_field" DEFERRABLE INITIALLY DEFERRED'
+        )
+
+        # Reverse the migration to drop the index and constraint, and verify
+        # that the lock_timeout queries are correct.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, new_state, project_state
+                )
+
+        # 1. Check that the constraint is still there.
+        assert queries[0]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'unique_int_field';
+            """)
+
+        # 2. perform the ALTER TABLE.
+        assert (
+            reverse_queries[1]["sql"]
+            == 'ALTER TABLE "example_app_intmodel" DROP CONSTRAINT "unique_int_field"'
+        )
+
+        # Verify the constraint doesn't exist any more.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_CONSTRAINT_EXISTS_QUERY,
+                {
+                    "table_name": "example_app_intmodel",
+                    "constraint_name": "unique_int_field",
+                },
+            )
+            assert not cursor.fetchone()
+
+    @pytest.mark.django_db(transaction=True)
     def test_raises_if_constraint_already_exists(self):
         project_state = ProjectState()
         project_state.add_model(ModelState.from_model(IntModel))

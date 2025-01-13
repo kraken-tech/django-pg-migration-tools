@@ -8,6 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Enhanced `SaferAddUniqueConstraint` to support a `UniqueConstraint` with the
+  `deferrable` argument.
+
 ## [0.1.16] - 2025-01-08
 
 ### Added
