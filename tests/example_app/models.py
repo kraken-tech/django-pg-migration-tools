@@ -1,4 +1,21 @@
+import django
 from django.db import models
+
+
+def get_check_constraint(condition: models.Q, name: str) -> models.CheckConstraint:
+    if django.VERSION >= (5, 1):
+        # https://docs.djangoproject.com/en/5.1/releases/5.1/
+        # The check keyword argument of CheckConstraint is deprecated in
+        # favor of condition.
+        return models.CheckConstraint(
+            condition=condition,
+            name=name,
+        )
+    else:
+        return models.CheckConstraint(
+            check=condition,
+            name=name,
+        )
 
 
 class IntModel(models.Model):
@@ -44,3 +61,13 @@ class NotNullIntFieldModel(models.Model):
 
 class CharIDModel(models.Model):
     id = models.CharField(max_length=42, primary_key=True)
+
+
+class ModelWithCheckConstraint(models.Model):
+    class Meta:
+        constraints = (
+            get_check_constraint(
+                condition=models.Q(id=42),
+                name="id_must_be_42",
+            ),
+        )

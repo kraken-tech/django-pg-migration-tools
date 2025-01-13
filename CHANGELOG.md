@@ -13,6 +13,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 - Enhanced `SaferAddUniqueConstraint` to support a `UniqueConstraint` with the
   `deferrable` argument.
 - A new operation to remove a foreign key field: `SaferRemoveFieldForeignKey`.
+- A new operation `SaferRemoveCheckConstraint` which does the opposite of
+  `SaferAddCheckConstraint`.
 
 ## [0.1.16] - 2025-01-08
 

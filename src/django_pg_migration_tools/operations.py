@@ -528,7 +528,9 @@ class SafeConstraintOperationManager(base_operations.Operation):
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        if not self._constraint_exists(schema_editor, constraint):
+        if not self._constraint_exists(
+            schema_editor, constraint, collect_default=False
+        ):
             self._create_not_valid_check_constraint(constraint, model, schema_editor)
             self._validate_check_constraint(constraint, model, schema_editor)
             return
@@ -552,7 +554,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        if not self._constraint_exists(schema_editor, constraint):
+        if not self._constraint_exists(schema_editor, constraint, collect_default=True):
             # Nothing to delete.
             return
 
@@ -617,12 +619,14 @@ class SafeConstraintOperationManager(base_operations.Operation):
         self,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         constraint: models.UniqueConstraint | models.CheckConstraint,
+        collect_default: bool = False,
     ) -> bool:
         return _run_introspection_query(
             schema_editor,
             psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
             .format(constraint_name=psycopg_sql.Literal(constraint.name))
             .as_string(schema_editor.connection.connection),
+            collect_default=collect_default,
         )
 
     def _not_valid_constraint_exists(
@@ -1627,4 +1631,56 @@ class SaferAddCheckConstraint(operation_models.AddConstraint):
         return (
             f"{base}. Note: Using django_pg_migration_tools "
             f"SaferAddCheckConstraint operation."
+        )
+
+
+class SaferRemoveCheckConstraint(operation_models.RemoveConstraint):
+    name: str
+    model_name: str
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        from_model_state = from_state.models[app_label, self.model_name_lower]
+        constraint: models.CheckConstraint = from_model_state.get_constraint_by_name(
+            self.name
+        )
+        SafeConstraintOperationManager().drop_check_constraint(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            constraint=constraint,
+        )
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        to_model_state = to_state.models[app_label, self.model_name_lower]
+        constraint: models.CheckConstraint = to_model_state.get_constraint_by_name(
+            self.name
+        )
+        SafeConstraintOperationManager().create_check_constraint(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            constraint=constraint,
+        )
+
+    def describe(self) -> str:
+        base = super().describe()
+        return (
+            f"{base}. Note: Using django_pg_migration_tools "
+            f"SaferRemoveCheckConstraint operation."
         )
