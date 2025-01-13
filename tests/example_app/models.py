@@ -5,6 +5,10 @@ class IntModel(models.Model):
     int_field = models.IntegerField(default=0)
 
 
+class ModelWithForeignKey(models.Model):
+    fk = models.ForeignKey(IntModel, null=True, on_delete=models.CASCADE)
+
+
 class CharModel(models.Model):
     char_field = models.CharField(default="char")
 

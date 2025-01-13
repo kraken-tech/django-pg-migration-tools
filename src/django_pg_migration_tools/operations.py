@@ -1262,12 +1262,12 @@ class ForeignKeyManager(base_operations.Operation):
         ):
             return
 
-        if not self._column_exists():
+        if not self._column_exists(collect_default=True):
             return
 
         self._alter_table_drop_column()
 
-    def _column_exists(self) -> bool:
+    def _column_exists(self, collect_default: bool = False) -> bool:
         return _run_introspection_query(
             self.schema_editor,
             psycopg_sql.SQL(ColumnQueries.CHECK_COLUMN_EXISTS)
@@ -1276,6 +1276,7 @@ class ForeignKeyManager(base_operations.Operation):
                 column_name=psycopg_sql.Literal(self.column_name),
             )
             .as_string(self.schema_editor.connection.connection),
+            collect_default=collect_default,
         )
 
     def _get_remote_model(self) -> models.Model:
@@ -1452,6 +1453,59 @@ class SaferAddFieldForeignKey(operation_fields.AddField):
         return (
             f"{base}. Note: Using django_pg_migration_tools "
             f"SaferAddFieldForeignKey operation."
+        )
+
+
+class SaferRemoveFieldForeignKey(operation_fields.RemoveField):
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        field = from_state.apps.get_model(app_label, self.model_name)._meta.get_field(
+            self.name
+        )
+        ForeignKeyManager(
+            app_label,
+            schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            model_name=self.model_name,
+            column_name=self.name,
+            field=field,
+            unique=False,
+        ).drop_fk_field()
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        field = to_state.apps.get_model(app_label, self.model_name)._meta.get_field(
+            self.name
+        )
+        ForeignKeyManager(
+            app_label,
+            schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            model=to_state.apps.get_model(app_label, self.model_name),
+            model_name=self.model_name,
+            column_name=self.name,
+            field=field,
+            unique=False,
+        ).add_fk_field()
+
+    def describe(self) -> str:
+        base = super().describe()
+        return (
+            f"{base}. Note: Using django_pg_migration_tools "
+            f"SaferRemoveFieldForeignKey operation."
         )
 
 
