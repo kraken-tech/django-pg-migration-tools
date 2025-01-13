@@ -110,8 +110,11 @@ snowballstemmer==2.2.0
 sphinx==8.1.3
     # via
     #   django-pg-migration-tools (pyproject.toml)
+    #   sphinx-design
     #   sphinx-rtd-theme
     #   sphinxcontrib-jquery
+sphinx-design==0.6.1
+    # via django-pg-migration-tools (pyproject.toml)
 sphinx-lint==1.0.0
     # via django-pg-migration-tools (pyproject.toml)
 sphinx-rtd-theme==3.0.2
