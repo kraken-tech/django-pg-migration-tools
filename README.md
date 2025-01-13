@@ -17,6 +17,7 @@ Tools to make Django migrations safer and more scalable.
   - [Removing indexes (concurrently)](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferRemoveIndexConcurrently)
   - [Setting a column to NOT NULL](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferAlterFieldSetNotNull)
   - [Adding foreign keys](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferAddFieldForeignKey)
+  - [Removing foreign keys](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferRemoveFieldForeignKey)
   - [Adding one to one fields](https://django-pg-migration-tools.readthedocs.io/en/latest/usage/operations.html#SaferAddFieldOneToOne)
 
 - **Database timeouts**:
