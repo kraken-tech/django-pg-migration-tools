@@ -4266,14 +4266,14 @@ class TestSaferRemoveCheckConstraint:
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # Same for backwards.
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
     @pytest.mark.django_db(transaction=True)
@@ -4291,7 +4291,7 @@ class TestSaferRemoveCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
         # No queries have run, because the migration wasn't allowed to run by
         # the router.
@@ -4301,7 +4301,7 @@ class TestSaferRemoveCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         # No queries have run, because the migration wasn't allowed to run by
@@ -4355,7 +4355,7 @@ class TestSaferRemoveCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         # 1. Check that the constraint is still there.
@@ -4385,7 +4385,7 @@ class TestSaferRemoveCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_run_queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(second_run_queries) == 1
@@ -4400,7 +4400,7 @@ class TestSaferRemoveCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert len(reverse_queries) == 3
@@ -4438,7 +4438,7 @@ class TestSaferRemoveCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
             with utils.CaptureQueriesContext(connection) as second_reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert len(second_reverse_queries) == 2
@@ -4470,7 +4470,7 @@ class TestSaferRemoveCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as queries:
                 operation.database_forwards(
-                    self.app_label, editor, project_state, new_state
+                    self.app_label, editor, from_state=project_state, to_state=new_state
                 )
 
         assert len(queries) == 0
@@ -4495,7 +4495,7 @@ class TestSaferRemoveCheckConstraint:
         with connection.schema_editor(atomic=False, collect_sql=True) as editor:
             with utils.CaptureQueriesContext(connection) as reverse_queries:
                 operation.database_backwards(
-                    self.app_label, editor, new_state, project_state
+                    self.app_label, editor, from_state=new_state, to_state=project_state
                 )
 
         assert len(reverse_queries) == 0
