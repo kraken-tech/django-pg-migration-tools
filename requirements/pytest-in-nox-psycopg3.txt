@@ -63,5 +63,6 @@ typing-extensions==4.12.2
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext
+    #   psycopg
 virtualenv==20.28.1
     # via nox
