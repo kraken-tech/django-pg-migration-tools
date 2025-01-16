@@ -99,6 +99,31 @@ class ConstraintQueries:
     """)
 
 
+class ViewQueries:
+    CREATE_VIEW_AS_SELECT = "CREATE VIEW {view_name} AS SELECT * FROM {table_name};"
+    DROP_VIEW_IF_EXISTS = "DROP VIEW IF EXISTS {view_name};"
+    CHECK_VIEW_EXISTS = dedent("""
+        SELECT 1
+        FROM pg_catalog.pg_class
+        WHERE (
+            relname = {view_name}
+            AND relkind = 'v'
+        );
+    """)
+
+
+class TableQueries:
+    CHECK_TABLE_EXISTS = dedent("""
+        SELECT 1
+        FROM pg_catalog.pg_class
+        WHERE (
+            relname = {table_name}
+            AND relkind = 'r'
+        );
+    """)
+    ALTER_TABLE_RENAME_TO = "ALTER TABLE {old_name} RENAME TO {new_name};"
+
+
 class ColumnQueries:
     ALTER_TABLE_ADD_NULL_COLUMN = dedent("""
         ALTER TABLE {table_name}
@@ -1683,4 +1708,174 @@ class SaferRemoveCheckConstraint(operation_models.RemoveConstraint):
         return (
             f"{base}. Note: Using django_pg_migration_tools "
             f"SaferRemoveCheckConstraint operation."
+        )
+
+
+class TableRenameMustBeInsideTransaction(Exception):
+    pass
+
+
+class TableRenameManager(base_operations.Operation):
+    def __init__(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+        old_name: str,
+        new_name: str,
+    ):
+        self.app_label = app_label
+        self.schema_editor = schema_editor
+        self.from_state = from_state
+        self.to_state = to_state
+        self.old_name = old_name
+        self.new_name = new_name
+        self._validate()
+
+    def rename_table_and_add_view(self) -> None:
+        new_model = self.to_state.apps.get_model(self.app_label, self.new_name)
+        if not self.allow_migrate_model(self.schema_editor.connection.alias, new_model):
+            return
+
+        old_model = self.from_state.apps.get_model(self.app_label, self.old_name)
+        old_table_name = old_model._meta.db_table
+        if self._view_exists(name=old_table_name):
+            # If the view already exists, we might have already run the DDLs
+            # manually during quiet hours and are running the migration to
+            # achieve Django state consistency. We don't need to do anything
+            # else here.
+            return
+
+        new_table_name = new_model._meta.db_table
+        # If this operation was called off the back of a revert, a view with
+        # the new_name would've been created by the reverse operation. We might
+        # need to drop it before proceeding otherwise we'll have a relation
+        # name crash when trying to rename the table to the same name.
+        self._drop_view_if_exists(name=new_table_name, skip_if_collecting=True)
+        self._alter_table_rename_to(old_name=old_table_name, new_name=new_table_name)
+        self._create_view_as_select(source=new_table_name, alias=old_table_name)
+
+    def drop_view_and_rename_table(self) -> None:
+        new_model = self.from_state.apps.get_model(self.app_label, self.new_name)
+        if not self.allow_migrate_model(self.schema_editor.connection.alias, new_model):
+            return
+
+        old_model = self.to_state.apps.get_model(self.app_label, self.old_name)
+        old_table_name = old_model._meta.db_table
+        if self._table_exists(name=old_table_name):
+            return
+
+        self._drop_view_if_exists(name=old_table_name, skip_if_collecting=False)
+
+        new_table_name = new_model._meta.db_table
+        self._alter_table_rename_to(old_name=new_table_name, new_name=old_table_name)
+
+        # We are reverting the migration here, and it is possible that there
+        # are new servers with the new schema that haven't been rolled back
+        # yet. We add this view with the new name so that those servers don't
+        # crash when querying the new table. This view will be dropped once
+        # we forward the migration again.
+        self._create_view_as_select(source=old_table_name, alias=new_table_name)
+
+    def _view_exists(self, name: str) -> bool:
+        return _run_introspection_query(
+            self.schema_editor,
+            psycopg_sql.SQL(ViewQueries.CHECK_VIEW_EXISTS)
+            .format(view_name=psycopg_sql.Literal(name))
+            .as_string(self.schema_editor.connection.connection),
+        )
+
+    def _table_exists(self, name: str) -> bool:
+        return _run_introspection_query(
+            self.schema_editor,
+            psycopg_sql.SQL(TableQueries.CHECK_TABLE_EXISTS)
+            .format(table_name=psycopg_sql.Literal(name))
+            .as_string(self.schema_editor.connection.connection),
+        )
+
+    def _alter_table_rename_to(self, old_name: str, new_name: str) -> None:
+        self.schema_editor.execute(
+            psycopg_sql.SQL(TableQueries.ALTER_TABLE_RENAME_TO)
+            .format(
+                old_name=psycopg_sql.Identifier(old_name),
+                new_name=psycopg_sql.Identifier(new_name),
+            )
+            .as_string(self.schema_editor.connection.connection)
+        )
+
+    def _create_view_as_select(self, source: str, alias: str) -> None:
+        self.schema_editor.execute(
+            psycopg_sql.SQL(ViewQueries.CREATE_VIEW_AS_SELECT)
+            .format(
+                table_name=psycopg_sql.Identifier(source),
+                view_name=psycopg_sql.Identifier(alias),
+            )
+            .as_string(self.schema_editor.connection.connection)
+        )
+
+    def _drop_view_if_exists(self, name: str, skip_if_collecting: bool) -> None:
+        if skip_if_collecting and self.schema_editor.collect_sql:
+            # On a forward operation we might decide to skip this query from
+            # collection (display from sqlmigrate), because it's meant for a
+            # specific situation (reverting, then forwarding again), which is
+            # not the "normal way of operation" and thus shouldn't be included
+            # in the sqlmigrate output to avoid confusion.
+            return
+
+        self.schema_editor.execute(
+            psycopg_sql.SQL(ViewQueries.DROP_VIEW_IF_EXISTS)
+            .format(view_name=psycopg_sql.Identifier(name))
+            .as_string(self.schema_editor.connection.connection)
+        )
+
+    def _validate(self) -> None:
+        if not self.schema_editor.connection.in_atomic_block:
+            raise TableRenameMustBeInsideTransaction(
+                "Can't rename a table outside a transaction. Please set "
+                "atomic = True on the migration."
+            )
+
+
+class SaferRenameModelPart1(operation_models.RenameModel):
+    old_name: str
+    new_name: str
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        TableRenameManager(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            old_name=self.old_name,
+            new_name=self.new_name,
+        ).rename_table_and_add_view()
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        TableRenameManager(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            old_name=self.old_name,
+            new_name=self.new_name,
+        ).drop_view_and_rename_table()
+
+    def describe(self) -> str:
+        base = super().describe()
+        return (
+            f"{base}. Note: Using django_pg_migration_tools "
+            f"SaferRenameModelPart1 operation."
         )

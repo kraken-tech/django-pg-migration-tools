@@ -4252,6 +4252,222 @@ class TestSaferSaferAddFieldOneToOne:
         """)
 
 
+class TestSaferRenameModelPart1:
+    app_label = "example_app"
+
+    @pytest.mark.django_db(transaction=True)
+    def test_requires_atomic_true(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+        operation = operations.SaferRenameModelPart1(
+            old_name="IntModel",
+            new_name="NewIntModel",
+        )
+        operation.state_forwards(self.app_label, new_state)
+        with pytest.raises(operations.TableRenameMustBeInsideTransaction):
+            with connection.schema_editor(atomic=False) as editor:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+    @pytest.mark.django_db(transaction=True)
+    @override_settings(DATABASE_ROUTERS=[NeverAllow()])
+    def test_when_not_allowed_to_migrate_by_the_router(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+        operation = operations.SaferRenameModelPart1(
+            old_name="IntModel",
+            new_name="NewIntModel",
+        )
+        operation.state_forwards(self.app_label, new_state)
+        with connection.schema_editor(atomic=True, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+        # Try the same for the reverse operation:
+        with connection.schema_editor(atomic=True, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+
+        # No queries have run, because the migration wasn't allowed to run by
+        # the router.
+        assert len(queries) == 0
+
+    @pytest.mark.django_db(transaction=True)
+    def test_basic_operation(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+        operation = operations.SaferRenameModelPart1(
+            old_name="IntModel",
+            new_name="NewIntModel",
+        )
+
+        assert operation.describe() == (
+            "Rename model IntModel to NewIntModel. Note: Using "
+            "django_pg_migration_tools SaferRenameModelPart1 operation."
+        )
+
+        name, args, kwargs = operation.deconstruct()
+        assert name == "SaferRenameModelPart1"
+        assert args == []
+        assert kwargs == {
+            "new_name": "NewIntModel",
+            "old_name": "IntModel",
+        }
+        operation.state_forwards(self.app_label, new_state)
+        with connection.schema_editor(atomic=True, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+        assert len(queries) == 4
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_class
+            WHERE (
+                relname = 'example_app_intmodel'
+                AND relkind = 'v'
+            );
+        """)
+        assert queries[1]["sql"] == 'DROP VIEW IF EXISTS "example_app_newintmodel";'
+
+        assert queries[2]["sql"] == (
+            'ALTER TABLE "example_app_intmodel" RENAME TO "example_app_newintmodel";'
+        )
+        assert (
+            queries[3]["sql"]
+            == 'CREATE VIEW "example_app_intmodel" AS SELECT * FROM "example_app_newintmodel";'
+        )
+
+        # Moving forward again does nothing because the view is already there.
+        # In this scenario, only the introspection query to check for the view
+        # existence is triggered.
+        # Note that in real terms  a migration cannot be run forwards twice
+        # given that Django would've marked it as ran. However, this test still
+        # has value in which it replicates the case where someone might have
+        # already created the view and renamed the table manually outside of
+        # Django's migration, and now is running the migration to consolidate
+        # the app state.
+        with connection.schema_editor(atomic=True, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_forward_queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+        assert len(second_forward_queries) == 1
+
+        assert second_forward_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_class
+            WHERE (
+                relname = 'example_app_intmodel'
+                AND relkind = 'v'
+            );
+        """)
+
+        with connection.schema_editor(atomic=True, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+        assert len(reverse_queries) == 4
+
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_class
+            WHERE (
+                relname = 'example_app_intmodel'
+                AND relkind = 'r'
+            );
+        """)
+        assert (
+            reverse_queries[1]["sql"] == 'DROP VIEW IF EXISTS "example_app_intmodel";'
+        )
+        assert reverse_queries[2]["sql"] == (
+            'ALTER TABLE "example_app_newintmodel" RENAME TO "example_app_intmodel";'
+        )
+        assert reverse_queries[3]["sql"] == (
+            'CREATE VIEW "example_app_newintmodel" AS SELECT * FROM "example_app_intmodel";'
+        )
+
+        # Reverting again does nothing apart from trigger the introspection
+        # query.
+        with connection.schema_editor(atomic=True, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+        assert len(second_reverse_queries) == 1
+        assert second_reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_class
+            WHERE (
+                relname = 'example_app_intmodel'
+                AND relkind = 'r'
+            );
+        """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+        operation = operations.SaferRenameModelPart1(
+            old_name="IntModel",
+            new_name="NewIntModel",
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+        with connection.schema_editor(atomic=True, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+        assert len(queries) == 0
+        assert len(editor.collected_sql) == 2
+
+        # Introspection queries are ommited from sqlmigrate output.
+        assert (
+            editor.collected_sql[0]
+            == 'ALTER TABLE "example_app_intmodel" RENAME TO "example_app_newintmodel";'
+        )
+        assert (
+            editor.collected_sql[1]
+            == 'CREATE VIEW "example_app_intmodel" AS SELECT * FROM "example_app_newintmodel";'
+        )
+
+        with connection.schema_editor(atomic=True, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+
+        assert len(reverse_queries) == 0
+        assert len(editor.collected_sql) == 3
+
+        assert editor.collected_sql[0] == 'DROP VIEW IF EXISTS "example_app_intmodel";'
+
+        assert (
+            editor.collected_sql[1]
+            == 'ALTER TABLE "example_app_newintmodel" RENAME TO "example_app_intmodel";'
+        )
+        assert (
+            editor.collected_sql[2]
+            == 'CREATE VIEW "example_app_newintmodel" AS SELECT * FROM "example_app_intmodel";'
+        )
+
+
 class TestSaferRemoveCheckConstraint:
     app_label = "example_app"
 
