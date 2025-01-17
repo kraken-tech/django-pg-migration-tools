@@ -8,6 +8,13 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- A new operation to handle the first step of renaming a model:
+  `SaferRenameModelPart1`.
+- A new operation to handle the second (and last) step of renaming a model:
+  `SaferRenameModelPart2`.
+
 ## [0.1.17] - 2025-01-14
 
 ### Added
