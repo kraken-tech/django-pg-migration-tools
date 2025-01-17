@@ -1778,6 +1778,20 @@ class TableRenameManager(base_operations.Operation):
         # we forward the migration again.
         self._create_view_as_select(source=old_table_name, alias=new_table_name)
 
+    def drop_old_view(self, view_name: str) -> None:
+        model = self.to_state.apps.get_model(self.app_label, self.new_name)
+        if not self.allow_migrate_model(self.schema_editor.connection.alias, model):
+            return
+        self._drop_view_if_exists(view_name, skip_if_collecting=False)
+
+    def recreate_old_view(self, view_name: str) -> None:
+        model = self.to_state.apps.get_model(self.app_label, self.new_name)
+        if not self.allow_migrate_model(self.schema_editor.connection.alias, model):
+            return
+        if self._view_exists(view_name):
+            return
+        self._create_view_as_select(source=model._meta.db_table, alias=view_name)
+
     def _view_exists(self, name: str) -> bool:
         return _run_introspection_query(
             self.schema_editor,
@@ -1879,3 +1893,50 @@ class SaferRenameModelPart1(operation_models.RenameModel):
             f"{base}. Note: Using django_pg_migration_tools "
             f"SaferRenameModelPart1 operation."
         )
+
+
+class SaferRenameModelPart2(operation_models.Operation):  # type: ignore[misc, name-defined]
+    def __init__(self, new_name: str, old_table_name: str) -> None:
+        self.new_name = new_name
+        self.old_table_name = old_table_name
+
+    def database_forwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        TableRenameManager(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            old_name="",
+            new_name=self.new_name,
+        ).drop_old_view(view_name=self.old_table_name)
+
+    def database_backwards(
+        self,
+        app_label: str,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        from_state: migrations.state.ProjectState,
+        to_state: migrations.state.ProjectState,
+    ) -> None:
+        TableRenameManager(
+            app_label=app_label,
+            schema_editor=schema_editor,
+            from_state=from_state,
+            to_state=to_state,
+            old_name="",
+            new_name=self.new_name,
+        ).recreate_old_view(view_name=self.old_table_name)
+
+    def describe(self) -> str:
+        return "Using django_pg_migration_tools SaferRenameModelPart2 operation."
+
+    def state_forwards(
+        self, app_label: str, state: migrations.state.ProjectState
+    ) -> None:
+        # This operation does not change the overall state of the app.
+        pass
