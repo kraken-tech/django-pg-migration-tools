@@ -1009,3 +1009,183 @@ Class Definitions
                   ),
               ),
           ]
+
+
+.. py:class:: SaferRenameModelPart1(old_name: str, new_name: str)
+
+    First step on a routine that provides a safer RenameModel alternative.
+
+    :param old_name: Old model name as it was once defined e.g Foo.
+    :type old_name: str
+    :param new_name: New model name as it is now defined e.g NewFoo.
+    :type new_name: str
+
+    **Why use this SaferRenameModelPart1 operation?**
+    -------------------------------------------------
+
+    When using Django's default ``RenameModel`` operation, the SQL created has
+    the following form:
+
+    .. code-block:: sql
+
+      BEGIN;
+      --
+      -- Rename model Foo to NewFoo
+      --
+      ALTER TABLE "myapp_foo" RENAME TO "myapp_newfoo";
+      COMMIT;
+
+    In modern applications that use gradual deployments like blue/green
+    deploys, renaming a table in-flight might cause issues when the traffic
+    hasn't fully been moved from the old servers (blue) to the new ones
+    (green).
+
+    For example, in a Django app the old servers would see the app state as if
+    the recently renamed table was still using the old name, and will therefore
+    crash when the model is used on those servers.
+
+    Additionally if the model has foreign keys, the relating models will have
+    their foreign key constraints created from scratch which might take a long
+    time. Column names for M2M tables are also updated. For example:
+
+    .. code-block:: py
+
+      class NewFoo(models.Model):
+          pass
+
+
+      class Bar(models.Model):
+          foo = models.ForeignKey(NewFoo, on_delete=models.CASCADE, null=True)
+
+
+      class Buzz(models.Model):
+          foos = models.ManyToManyField(NewFoo)
+
+    Culminates on the following statements:
+
+    .. code-block:: sql
+
+      BEGIN;
+      --
+      -- Rename model Foo to NewFoo
+      --
+      ALTER TABLE "myapp_foo" RENAME TO "myapp_newfoo";
+
+      SET CONSTRAINTS "myapp_bar_foo_id_f5927bae_fk_myapp_newfoo_id" IMMEDIATE;
+
+      ALTER TABLE "myapp_bar" DROP CONSTRAINT "myapp_bar_foo_id_f5927bae_fk_myapp_newfoo_id";
+
+      ALTER TABLE "myapp_bar" ADD CONSTRAINT "myapp_bar_foo_id_f5927bae_fk_myapp_newfoo_id"
+      FOREIGN KEY ("foo_id") REFERENCES "myapp_newfoo" ("id") DEFERRABLE INITIALLY DEFERRED;
+
+      ALTER TABLE "myapp_buzz_foos" RENAME COLUMN "foo_id" TO "newfoo_id";
+      COMMIT;
+
+    Instead, this operation avoids the inevitable crash on old servers by
+    creating a view from the schema of the renamed table, and it also avoids
+    the recreation of related objects (like FK constraints) unnecessarily.
+    Effectively, this view is an alias to the underlying table:
+
+    .. code-block:: sql
+
+      BEGIN;
+
+      ALTER TABLE myapp_foo RENAME TO myapp_newfoo;
+
+      CREATE VIEW myapp_foo AS SELECT * FROM myapp_newfoo;
+
+      COMMIT;
+
+    **NOTE**: Additional queries that are triggered by this operation to
+    guarantee idempotency have been omitted from the snippet above. The key
+    take away is that if this migration fails, it can be reattempted and it
+    will pick up from where it has left off (reentrancy).
+
+    **NOTE**: The name of database objects that Django created in relation to
+    the old name of the table (e.g., constraint names), *are not renamed* as
+    part of this operation. However, their definitions are automatically
+    updated by Postgres to point to the new table as part of the ``ALTER TABLE
+    ... RENAME`` instruction. Renaming those objects is left to the user,
+    though it is not strictly necessary as long as you are happy with the old
+    names.
+
+    How to use
+    ----------
+
+    1. Rename your model
+
+    .. code-block:: diff
+
+      -    class Foo(models.Model):
+      +    class NewFoo(models.Model):
+
+
+    2. Make the new migration:
+
+    .. code-block:: bash
+
+      ./manage.py makemigrations
+
+    3. The only change you need to perform is:
+
+       1. Swap Django's ``RenameModel`` for this package's
+          ``SaferRenameModelPart1`` operation.
+
+    .. code-block:: diff
+
+      + from django_pg_migration_tools import operations
+      from django.db import migrations
+
+
+      class Migration(migrations.Migration):
+          dependencies = [("myapp", "0042_dependency")]
+
+          operations = [
+      -        migrations.RenameModel(
+      +        operations.SaferRenameModelPart1(
+                  old_name="Foo",
+                  new_name="NewFoo",
+              ),
+          ]
+
+.. py:class:: SaferRenameModelPart2(new_name: str, old_table_name: str)
+
+    Second and final step on a routine that provides a safer RenameModel
+    alternative.
+
+    :param new_name: New model name as it is now defined e.g NewFoo.
+    :type new_name: str
+    :param old_table_name: The name of the old table before the renaming took place.
+    :type old_table_name: str
+
+    This operation is essentially the complement of ``SaferRenameModelPart1``
+    and is used drop the view created to satisfy old servers running the old
+    code (and Django state). After all servers are verified to be in the new
+    version, i.e., using the new table, this operation can be triggered.
+
+    How to use
+    ----------
+
+    1. Create a new empty migration
+
+    .. code-block:: sh
+
+      ./manage.py makemigrations --empty myapp
+
+    2. Insert the operation
+
+    .. code-block:: diff
+
+      + from django_pg_migration_tools import operations
+      from django.db import migrations
+
+
+      class Migration(migrations.Migration):
+          dependencies = [("myapp", "0043_part_1_migration")]
+
+          operations = [
+      +        operations.SaferRenameModelPart2(
+      +           new_name="NewFoo",
+      +           old_table_name="myapp_foo"
+              ),
+          ]
