@@ -23,6 +23,7 @@ from tests.example_app.models import (
     ModelWithCheckConstraint,
     ModelWithForeignKey,
     NotNullIntFieldModel,
+    NullFKFieldModel,
     NullIntFieldModel,
     get_check_constraint,
 )
@@ -1691,6 +1692,99 @@ class TestSaferAlterFieldSetNotNull:
         # No queries have run, because the migration wasn't allowed to run by
         # the router.
         assert len(queries) == 0
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_field_is_a_foreign_key(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(NullFKFieldModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAlterFieldSetNotNull(
+            model_name="nullfkfieldmodel",
+            name="fk",
+            field=models.ForeignKey(
+                on_delete=models.CASCADE, to="example_app.intmodel"
+            ),
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+        assert len(queries) == 6
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullfkfieldmodel'::regclass
+                AND attname = 'fk_id'
+                AND attnotnull IS TRUE;
+        """)
+        assert queries[1]["sql"] == dedent("""
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'example_ap_fk_id_9fd70957e5';
+        """)
+        assert queries[2]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullfkfieldmodel"
+            ADD CONSTRAINT "example_ap_fk_id_9fd70957e5"
+            CHECK ("fk_id" IS NOT NULL) NOT VALID;
+        """)
+        assert queries[3]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullfkfieldmodel"
+            VALIDATE CONSTRAINT "example_ap_fk_id_9fd70957e5";
+        """)
+        assert queries[4]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullfkfieldmodel"
+            ALTER COLUMN "fk_id"
+            SET NOT NULL;
+        """)
+        assert queries[5]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullfkfieldmodel"
+            DROP CONSTRAINT "example_ap_fk_id_9fd70957e5";
+        """)
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+        assert len(reverse_queries) == 2
+
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullfkfieldmodel'::regclass
+                AND attname = 'fk_id'
+                AND attnotnull IS TRUE;
+        """)
+        assert reverse_queries[1]["sql"] == dedent("""
+            ALTER TABLE "example_app_nullfkfieldmodel"
+            ALTER COLUMN "fk_id"
+            DROP NOT NULL;
+        """)
+
+        # Reversing again does nothing apart from checking the field is already
+        # nullable.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+        assert len(second_reverse_queries) == 1
+
+        assert second_reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_nullfkfieldmodel'::regclass
+                AND attname = 'fk_id'
+                AND attnotnull IS TRUE;
+        """)
 
     @pytest.mark.django_db(transaction=True)
     def test_operation(self):

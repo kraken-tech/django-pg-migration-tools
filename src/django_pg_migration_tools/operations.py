@@ -1111,11 +1111,12 @@ class SaferAlterFieldSetNotNull(operation_fields.AlterField):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
+        model = to_state.apps.get_model(app_label, self.model_name)
         NullsManager().set_not_null(
             app_label,
             schema_editor,
-            model=to_state.apps.get_model(app_label, self.model_name),
-            column_name=self.name,
+            model=model,
+            column_name=model._meta.get_field(self.name).column,
         )
 
     def database_backwards(
@@ -1125,11 +1126,12 @@ class SaferAlterFieldSetNotNull(operation_fields.AlterField):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
+        model = to_state.apps.get_model(app_label, self.model_name)
         NullsManager().set_null(
             app_label,
             schema_editor,
-            model=to_state.apps.get_model(app_label, self.model_name),
-            column_name=self.name,
+            model=model,
+            column_name=model._meta.get_field(self.name).column,
         )
 
     def describe(self) -> str:

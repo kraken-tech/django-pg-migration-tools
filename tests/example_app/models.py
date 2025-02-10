@@ -54,6 +54,10 @@ class NullIntFieldModel(models.Model):
     int_field = models.IntegerField(null=True)
 
 
+class NullFKFieldModel(models.Model):
+    fk = models.ForeignKey(IntModel, null=True, on_delete=models.CASCADE)
+
+
 class NotNullIntFieldModel(models.Model):
     # null=False is the default, but we set it here for clarity.
     int_field = models.IntegerField(null=False)
