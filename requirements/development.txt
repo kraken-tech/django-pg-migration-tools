@@ -8,11 +8,13 @@ asgiref==3.8.1
     # via
     #   django
     #   django-stubs
-babel==2.16.0
+attrs==25.1.0
+    # via nox
+babel==2.17.0
     # via sphinx
 build==1.2.2.post1
     # via django-pg-migration-tools (pyproject.toml)
-certifi==2024.12.14
+certifi==2025.1.31
     # via requests
 cfgv==3.4.0
     # via pre-commit
@@ -20,31 +22,33 @@ charset-normalizer==3.4.1
     # via requests
 colorlog==6.9.0
     # via nox
-coverage==7.6.10
+coverage==7.6.11
     # via django-pg-migration-tools (pyproject.toml)
+dependency-groups==1.3.0
+    # via nox
 distlib==0.3.9
     # via virtualenv
 dj-database-url==2.3.0
     # via django-pg-migration-tools (pyproject.toml)
-django==5.1.4
+django==5.1.6
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext
-django-stubs==5.1.1
+django-stubs==5.1.3
     # via django-pg-migration-tools (pyproject.toml)
-django-stubs-ext==5.1.1
+django-stubs-ext==5.1.3
     # via django-stubs
 docutils==0.21.2
     # via
     #   sphinx
     #   sphinx-rtd-theme
-environs==14.1.0
+environs==14.1.1
     # via django-pg-migration-tools (pyproject.toml)
-filelock==3.16.1
+filelock==3.17.0
     # via virtualenv
-identify==2.6.5
+identify==2.6.7
     # via pre-commit
 idna==3.10
     # via requests
@@ -56,19 +60,20 @@ jinja2==3.1.5
     # via sphinx
 markupsafe==3.0.2
     # via jinja2
-marshmallow==3.25.1
+marshmallow==3.26.1
     # via environs
-mypy==1.14.1
+mypy==1.15.0
     # via django-pg-migration-tools (pyproject.toml)
 mypy-extensions==1.0.0
     # via mypy
 nodeenv==1.9.1
     # via pre-commit
-nox==2024.10.9
+nox==2025.2.9
     # via django-pg-migration-tools (pyproject.toml)
 packaging==24.2
     # via
     #   build
+    #   dependency-groups
     #   marshmallow
     #   nox
     #   pytest
@@ -79,11 +84,11 @@ pluggy==1.5.0
     # via pytest
 polib==1.2.0
     # via sphinx-lint
-pre-commit==4.0.1
+pre-commit==4.1.0
     # via django-pg-migration-tools (pyproject.toml)
-psycopg==3.2.3
+psycopg==3.2.4
     # via django-pg-migration-tools (pyproject.toml)
-psycopg-binary==3.2.3
+psycopg-binary==3.2.4
     # via psycopg
 pygments==2.19.1
     # via sphinx
@@ -93,7 +98,7 @@ pytest==8.3.4
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   pytest-django
-pytest-django==4.9.0
+pytest-django==4.10.0
     # via django-pg-migration-tools (pyproject.toml)
 python-dotenv==1.0.1
     # via environs
@@ -103,7 +108,7 @@ regex==2024.11.6
     # via sphinx-lint
 requests==2.32.3
     # via sphinx
-ruff==0.9.1
+ruff==0.9.6
     # via django-pg-migration-tools (pyproject.toml)
 snowballstemmer==2.2.0
     # via sphinx
@@ -135,7 +140,7 @@ sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 sqlparse==0.5.3
     # via django
-types-psycopg2==2.9.21.20241019
+types-psycopg2==2.9.21.20250121
     # via django-pg-migration-tools (pyproject.toml)
 types-pyyaml==6.0.12.20241230
     # via django-stubs
@@ -145,10 +150,9 @@ typing-extensions==4.12.2
     #   django-stubs
     #   django-stubs-ext
     #   mypy
-    #   psycopg
 urllib3==2.3.0
     # via requests
-virtualenv==20.28.1
+virtualenv==20.29.2
     # via
     #   nox
     #   pre-commit
