@@ -1693,7 +1693,6 @@ class TestSaferAlterFieldSetNotNull:
         # the router.
         assert len(queries) == 0
 
-    @pytest.mark.xfail
     @pytest.mark.django_db(transaction=True)
     def test_when_field_is_a_foreign_key(self):
         project_state = ProjectState()

@@ -8,6 +8,13 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- `SaferAlterFieldSetNotNull` did not work when the field dropping the NOT NULL
+  constraint was a ForeignKey. An error such as:
+  `django.db.utils.ProgrammingError: column "foo" does not exist` would have
+  been raised instead.
+
 ## [0.1.17] - 2025-01-14
 
 ### Added
