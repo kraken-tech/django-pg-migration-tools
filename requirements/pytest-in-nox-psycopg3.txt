@@ -6,35 +6,40 @@ asgiref==3.8.1
     # via
     #   django
     #   django-stubs
+attrs==25.1.0
+    # via nox
 colorlog==6.9.0
     # via nox
-coverage==7.6.10
+coverage==7.6.11
     # via django-pg-migration-tools (pyproject.toml)
+dependency-groups==1.3.0
+    # via nox
 distlib==0.3.9
     # via virtualenv
 dj-database-url==2.3.0
     # via django-pg-migration-tools (pyproject.toml)
-django==5.1.4
+django==5.1.6
     # via
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext
-django-stubs==5.1.1
+django-stubs==5.1.3
     # via django-pg-migration-tools (pyproject.toml)
-django-stubs-ext==5.1.1
+django-stubs-ext==5.1.3
     # via django-stubs
-environs==14.1.0
+environs==14.1.1
     # via django-pg-migration-tools (pyproject.toml)
-filelock==3.16.1
+filelock==3.17.0
     # via virtualenv
 iniconfig==2.0.0
     # via pytest
-marshmallow==3.25.1
+marshmallow==3.26.1
     # via environs
-nox==2024.10.9
+nox==2025.2.9
     # via django-pg-migration-tools (pyproject.toml)
 packaging==24.2
     # via
+    #   dependency-groups
     #   marshmallow
     #   nox
     #   pytest
@@ -42,15 +47,15 @@ platformdirs==4.3.6
     # via virtualenv
 pluggy==1.5.0
     # via pytest
-psycopg==3.2.3
+psycopg==3.2.4
     # via django-pg-migration-tools (pyproject.toml)
-psycopg-binary==3.2.3
+psycopg-binary==3.2.4
     # via psycopg
 pytest==8.3.4
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   pytest-django
-pytest-django==4.9.0
+pytest-django==4.10.0
     # via django-pg-migration-tools (pyproject.toml)
 python-dotenv==1.0.1
     # via environs
@@ -63,6 +68,5 @@ typing-extensions==4.12.2
     #   dj-database-url
     #   django-stubs
     #   django-stubs-ext
-    #   psycopg
-virtualenv==20.28.1
+virtualenv==20.29.2
     # via nox

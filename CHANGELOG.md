@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.18] - 2025-02-11
+
 ### Fixed
 
 - `SaferAlterFieldSetNotNull` did not work when the field dropping the NOT NULL

@@ -2,9 +2,9 @@
 #    uv pip compile pyproject.toml --resolver=backtracking --extra=docs --output-file=requirements/docs.txt
 alabaster==1.0.0
     # via sphinx
-babel==2.16.0
+babel==2.17.0
     # via sphinx
-certifi==2024.12.14
+certifi==2025.1.31
     # via requests
 charset-normalizer==3.4.1
     # via requests
