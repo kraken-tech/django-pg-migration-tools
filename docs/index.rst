@@ -56,6 +56,7 @@ Django.
    :maxdepth: 3
    :caption: Contents
 
+   guides/migration_guides
    usage/indexes
    usage/management_commands
    usage/operations
