@@ -227,6 +227,7 @@ Class Definitions
           ]
 
 
+.. _safer_alter_field_set_not_null:
 .. py:class:: SaferAlterFieldSetNotNull(model_name: str, name: str, field: models.Field)
 
     Provides a safer way to alter a field to NOT NULL.
@@ -241,96 +242,13 @@ Class Definitions
     **Why use this SaferAlterFieldSetNotNull operation?**
     -----------------------------------------------------
 
-    When using Django's default AlterField operation, the SQL created has the
-    following form:
+    Refer to the following links:
 
-    .. code-block:: sql
+    - :ref:`Explanation guide behind the need for this class
+      <guide_setting_a_field_to_not_null>`.
 
-      ALTER TABLE "foo" ALTER COLUMN "bar" SET NOT NULL;
-
-    This statement will acquire an access exclusive lock on the "foo" table
-    while it rescans the table to find potential violations.
-
-    All reads and writes will be blocked.
-
-    This operation leverages Postgres constraints to safely set the column to
-    not null. This operation will trigger the following queries:
-
-    .. code-block:: sql
-
-      -- The below still requires ACCESS EXCLUSIVE lock, but doesn't require a
-      -- full table scan.
-      -- This check will only be applied to new or modified rows, existing rows
-      -- won't be validated because of the NOT VALID clause.
-      ALTER TABLE foo
-      ADD CONSTRAINT bar_not_null
-      CHECK (bar IS NOT NULL) NOT VALID;
-
-      -- The below performs a sequential scan, but without an exclusive lock.
-      -- Concurrent sessions can read/write.
-      -- The operation will require a SHARE UPDATE EXCLUSIVE lock, which will
-      -- block only other schema changes and the VACUUM operation.
-      ALTER TABLE foo VALIDATE CONSTRAINT bar_not_null;
-
-      -- Requires ACCESS EXCLUSIVE LOCK, but bar_not_null proves that there
-      -- is no NULL in this column and a full table scan is not required.
-      -- Therefore, the ALTER TABLE command should be fast.
-      ALTER TABLE foo ALTER COLUMN bar SET NOT NULL;
-
-      -- The CHECK constraint has fulfilled its obligation and can now
-      -- departure.
-      -- This takes an ACCESS EXCLUSIVE lock, but should run very fast as it
-      -- only has meaningful changes on the catalogue level.
-      ALTER TABLE foo DROP CONSTRAINT bar_not_null;
-
-    **NOTE**: Additional queries triggered by this operation to guarantee
-    idempotency have been omitted from the snippet above. The key take away is
-    that if this migration fails, it can be attempted again and it will pick up
-    from where it has left off (reentrancy).
-
-    How to use
-    ----------
-    1. Make sure that all the rows in the table have already been backfilled
-       with a value other than NULL for the column being changed. Also ensure
-       that your application code doesn't generate NULL values for that column
-       going forward.
-
-    2. Set ``null=False`` in your existing field:
-
-    .. code-block:: diff
-
-      -    bar = models.IntegerField(null=True)
-      +    bar = models.IntegerField(null=False)
-
-    3. Make the new migration:
-
-    .. code-block:: bash
-
-      ./manage.py makemigrations
-
-    4. The only changes you need to perform are: (i) swap Django's
-       ``AlterField`` for this package's ``SaferAlterFieldSetNotNull``
-       operation, and (ii) use a non-atomic migration.
-
-    .. code-block:: diff
-
-      + from django_pg_migration_tools import operations
-      from django.db import migrations
-
-
-      class Migration(migrations.Migration):
-      +   atomic = False
-
-          dependencies = [("myapp", "0042_dependency")]
-
-          operations = [
-      -        migrations.AlterField(
-      +        operations.SaferAlterFieldSetNotNull(
-                  model_name="foo",
-                  name="bar",
-                  field=models.IntegerField()
-              ),
-          ]
+    - :ref:`Instructions on how to use this class in a migration
+      <guide_how_to_use_safer_alter_field_set_not_null>`.
 
 .. _safer_add_field_foreign_key:
 .. py:class:: SaferAddFieldForeignKey(model_name: str, name: str, field: models.ForeignKey)
