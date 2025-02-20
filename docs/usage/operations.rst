@@ -84,6 +84,7 @@ Class Definitions
     - :ref:`Instructions on how to use this class in a migration
       <guide_how_to_use_safer_add_unique_constraint>`.
 
+.. _safer_remove_unique_constraint:
 
 .. py:class:: SaferRemoveUniqueConstraint(model_name: str, name: str)
 
@@ -98,64 +99,11 @@ Class Definitions
     **Why use this SaferRemoveUniqueConstraint operation?**
     -------------------------------------------------------
 
-    The operation that Django provides (``RemoveConstraint``) has the
-    following limitations:
+    - :ref:`Explanation guide behind the need for this class
+      <guide_removing_a_unique_constraint>`.
 
-    1. The operation fails if the constraint has already been removed.
-    2. When reverting, the alter table statement provided by Django to recreate
-       the constraint will block reads and writes on the table.
-
-    This custom operation fixes those problems by:
-
-    - Having a custom forward operation that will only attempt to drop the
-      constraint if the constraint exists.
-    - Having a custom backward operation that will add the constraint back
-      without blocking any reads/writes by creating a unique index concurrently
-      first and using it to recreate the constraint. This is achieved through
-      the same strategy of
-      :ref:`SaferAddIndexConcurrently <safer_add_index_concurrently>`.
-
-    How to use
-    ----------
-
-    1. Remove the unique constraint in the relevant model as you would:
-
-    .. code-block:: diff
-
-           class Meta:
-      -        constraints = (
-      -           models.UniqueConstraint(fields=["foo"], name="foo_unique"),
-      -        )
-
-    2. Make the new migration:
-
-    .. code-block:: bash
-
-      ./manage.py makemigrations
-
-    3. The only changes you need to perform are: (i) swap Django's
-       ``RemoveConstraint`` for this package's ``SaferRemoveUniqueConstraint``
-       operation, and (ii) use a non-atomic migration.
-
-    .. code-block:: diff
-
-      + from django_pg_migration_tools import operations
-      from django.db import migrations
-
-
-      class Migration(migrations.Migration):
-      +   atomic = False
-
-          dependencies = [("myapp", "0042_dependency")]
-
-          operations = [
-      -        migrations.RemoveConstraint(
-      +        operations.SaferRemoveUniqueConstraint(
-                  model_name="mymodel",
-                  name="foo_unique",
-              ),
-          ]
-
+    - :ref:`Instructions on how to use this class in a migration
+      <guide_how_to_use_safer_remove_unique_constraint>`.
 
 .. _safer_alter_field_set_not_null:
 .. py:class:: SaferAlterFieldSetNotNull(model_name: str, name: str, field: models.Field)
