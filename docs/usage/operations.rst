@@ -123,6 +123,7 @@ Class Definitions
           ]
 
 
+.. _safer_add_unique_constraint:
 .. py:class:: SaferAddUniqueConstraint(model_name: str, constraint: models.UniqueConstraint, raise_if_exists: bool = True)
 
     Provides a way to create a unique constraint without blocking reads and
@@ -145,117 +146,13 @@ Class Definitions
     **Why use this SaferAddUniqueConstraint operation?**
     -----------------------------------------------------
 
-    Django already provides its own ``AddConstraint`` class, which can be
-    used to create unique constraints. However, Django's operation performs a
-    naive:
+    Refer to the following links:
 
-    .. code-block:: sql
+    - :ref:`Explanation guide behind the need for this class
+      <guide_adding_a_unique_constraint>`.
 
-      ALTER TABLE table ADD CONSTRAINT constraint UNIQUE (field);
-
-    Which has the following problems:
-
-    1. It acquires an ACCESS EXCLUSIVE lock on the table that blocks reads and
-       writes on the table.
-    2. In turn, it can also be blocked by a existing query. For example, a
-       long-running transaction could block this query, which in turn will
-       block other queries, creating a potential outage.
-    3. It doesn't work with retries, as it doesn't check if the constraint
-       already exists before attempting the ALTER TABLE.
-
-    This custom ``SaferAddUniqueConstraint`` operation addresses theses
-    problems by running the following operations:
-
-    .. code-block:: sql
-
-      -- Check if the constraint already exists.
-      SELECT conname
-      FROM pg_catalog.pg_constraint
-      WHERE conname = 'foo_unique';
-
-      -- Necessary so that we can reset the value later.
-      SHOW lock_timeout;
-
-      -- Necessary to avoid lock timeouts. This is a safe operation as
-      -- CREATE UNIQUE INDEX CONCURRENTLY takes a weaker SHARE UPDATE EXCLUSIVE
-      -- lock.
-      SET lock_timeout = 0;
-
-      -- Check if an INVALID index already exists.
-      SELECT relname
-      FROM pg_class, pg_index
-      WHERE (
-          pg_index.indisvalid = false
-          AND pg_index.indexrelid = pg_class.oid
-          AND relname = 'foo_unique_idx'
-      );
-
-      -- Remove the invalid index (only if the previous query returned one).
-      DROP INDEX CONCURRENTLY IF EXISTS foo_unique_idx;
-
-      -- Finally create the UNIQUE index
-      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS foo_unique_idx ON myapp_mymodel (column_name);
-
-      -- Reset lock_timeout to its original value ("1s" as an example).
-      SET lock_timeout = '1s';
-
-      -- Perform the ALTER TABLE using the unique index just created.
-      ALTER TABLE "myapp_mymodel" ADD CONSTRAINT "foo_unique" UNIQUE USING INDEX "foo_unique_idx";
-
-    .. dropdown:: Information about ``deferrable``
-        :color: info
-        :icon: info
-
-        The ``deferrable`` argument of ``UniqueConstraint`` is respected.
-
-        That is, if set to ``models.Deferrable.DEFERRED``, the ``ALTER TABLE``
-        command above will include the suffix ``DEFERRABLE INITIALLY
-        DEFERRED``.
-
-        The other value for ``models.Deferrable`` is ``IMMEDIATE``. No changes
-        are performed on the ``ALTER TABLE`` statement in this case as
-        ``IMMEDIATE`` is the default Postgres behaviour.
-
-    How to use
-    ----------
-
-    1. Add the unique constraint to the relevant model as you would normally:
-
-    .. code-block:: diff
-
-      +    class Meta:
-      +        constraints = (
-      +           models.UniqueConstraint(fields=["foo"], name="foo_unique"),
-      +        )
-
-    2. Make the new migration:
-
-    .. code-block:: bash
-
-      ./manage.py makemigrations
-
-    3. The only changes you need to perform are: (i) swap Django's
-       ``AddConstraint`` for this package's ``SaferAddUniqueConstraint``
-       operation, and (ii) use a non-atomic migration.
-
-    .. code-block:: diff
-
-      + from django_pg_migration_tools import operations
-      from django.db import migrations, models
-
-
-      class Migration(migrations.Migration):
-      +   atomic = False
-
-          dependencies = [("myapp", "0042_dependency")]
-
-          operations = [
-      -        migrations.AddConstraint(
-      +        operations.SaferAddUniqueConstraint(
-                  model_name="mymodel",
-                  constraint=models.UniqueConstraint(fields=["foo"], name="foo_unique"),
-              ),
-          ]
+    - :ref:`Instructions on how to use this class in a migration
+      <guide_how_to_use_safer_add_unique_constraint>`.
 
 
 .. py:class:: SaferRemoveUniqueConstraint(model_name: str, name: str)
