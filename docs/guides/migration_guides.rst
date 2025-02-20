@@ -739,3 +739,72 @@ Remember to use a non-atomic migration.
               name="foo_idx",
           ),
       ]
+
+
+.. _guide_removing_a_unique_constraint:
+
+Removing a Unique Constraint
+----------------------------
+
+The operation that Django provides (``RemoveConstraint``) has the
+following limitations:
+
+1. The operation fails if the constraint has already been removed.
+2. When reverting, the alter table statement provided by Django to recreate
+   the constraint will block reads and writes on the table.
+
+Our custom :ref:`SaferRemoveUniqueConstraint <safer_remove_unique_constraint>`
+operation will fix those problems by:
+
+- Having a custom forward operation that will only attempt to drop the
+  constraint if the constraint exists.
+- Having a custom backward operation that will add the constraint back
+  without blocking any reads/writes by creating a unique index concurrently
+  first and using it to recreate the constraint. This is achieved through
+  the same strategy of
+  :ref:`SaferAddIndexConcurrently <safer_add_index_concurrently>`.
+
+.. _guide_how_to_use_safer_remove_unique_constraint:
+
+How to use :ref:`SaferRemoveUniqueConstraint <safer_remove_unique_constraint>`
+______________________________________________________________________________
+
+1. Remove the unique constraint in the relevant model as you would:
+
+.. code-block:: diff
+
+       class Meta:
+  -        constraints = (
+  -           models.UniqueConstraint(fields=["foo"], name="foo_unique"),
+  -        )
+
+2. Make the new migration:
+
+.. code-block:: bash
+
+  ./manage.py makemigrations
+
+3. The only changes you need to perform are:
+
+   - Swap Django's ``RemoveConstraint`` for this package's
+     ``SaferRemoveUniqueConstraint`` operation
+   - Use a non-atomic migration.
+
+.. code-block:: diff
+
+  + from django_pg_migration_tools import operations
+  from django.db import migrations
+
+
+  class Migration(migrations.Migration):
+  +   atomic = False
+
+      dependencies = [("myapp", "0042_dependency")]
+
+      operations = [
+  -        migrations.RemoveConstraint(
+  +        operations.SaferRemoveUniqueConstraint(
+              model_name="mymodel",
+              name="foo_unique",
+          ),
+      ]
