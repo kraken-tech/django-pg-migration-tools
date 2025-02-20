@@ -436,3 +436,100 @@ _______________________________________________________________________
               ),
           ),
       ]
+
+.. _guide_adding_a_check_constraint:
+
+Adding a Check Constraint
+-------------------------
+
+When using Django's default ``AddConstraint`` operation, the SQL created
+has the following form:
+
+.. code-block:: sql
+
+  ALTER TABLE foo
+  ADD CONSTRAINT bar_not_negative
+  CHECK (bar >= 0);
+
+This operation acquires an ``ACCESS EXCLUSIVE`` lock, which is the most
+constricted lock in Postgres, blocking any reads, writes, maintenance
+activities, and other schema changes on the table.
+
+It will also scan the whole table to make sure there are no violations of
+the new constraint. All that while holding onto that lock.
+
+Our custom :ref:`SaferAddCheckConstraint <safer_add_check_constraint>`
+operation will instead perform the following:
+
+.. code-block:: sql
+
+  -- Add a NOT VALID constraint.
+  -- This type of constraint still works, but only for new writes.
+  -- It still requires the AccessExclusive lock, but as it doesn't need to
+  -- scan the table, it runs very fast.
+  ALTER TABLE foo
+  ADD CONSTRAINT bar_not_negative
+  CHECK (bar >= 0)
+  NOT VALID;
+
+  -- Validate the constraint.
+  -- This operation needs to scan the table, but it only holds a
+  -- ShareUpdateExclusive lock, which won't block reads or writes.
+  ALTER TABLE foo VALIDATE CONSTRAINT bar_not_negative;
+
+Note: The operations above are not inside a transaction. This is by design
+to avoid holding the ``ACCESS EXCLUSIVE`` lock from the first ALTER TABLE while
+the table scan from the second ALTER TABLE is running. This is also why the
+migration file must have ``atomic = False``.
+
+.. _guide_how_to_use_safer_add_check_constraint:
+
+How to use :ref:`SaferAddCheckConstraint <safer_add_check_constraint>`
+______________________________________________________________________
+
+1. Add a new Constraint field to your model
+
+.. code-block:: diff
+
+       class Meta:
+           constraints = [
+               ...
+  +            models.CheckConstraint(
+  +                condition=Q(bar__gte=0),
+  +                name='bar_not_negative',
+  +            ),
+           ]
+
+2. Make the new migration:
+
+.. code-block:: bash
+
+  ./manage.py makemigrations
+
+3. The only changes you need to perform are:
+
+   1. Swap Django's ``AddConstraint`` for this package's
+      ``SaferAddCheckConstraint`` operation.
+   2. Use a non-atomic migration.
+
+.. code-block:: diff
+
+  + from django_pg_migration_tools import operations
+  from django.db import migrations, models
+
+
+  class Migration(migrations.Migration):
+  +   atomic = False
+
+      dependencies = [("myapp", "0042_dependency")]
+
+      operations = [
+  -        migrations.AddConstraint(
+  +        operations.SaferAddCheckConstraint(
+               model_name="mymodel",
+               constraint=models.CheckConstraint(
+                   condition=models.Q(bar__gte=0),
+                   name="bar_not_negative"
+               ),
+          ),
+      ]
