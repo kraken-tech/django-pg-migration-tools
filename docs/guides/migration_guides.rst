@@ -872,3 +872,73 @@ _____________________________________________________________________________
               name="bar",
           ),
       ]
+
+.. _guide_removing_a_check_constraint:
+
+Removing a Check Constraint
+---------------------------
+
+The operation that Django provides (``RemoveConstraint``) has the
+following limitations:
+
+1. The operation fails if the constraint has already been removed.
+2. When reverting, the alter table statement provided by Django to recreate
+   the constraint will block reads and writes on the table.
+
+Our custom :ref:`SaferRemoveCheckConstraint <safer_remove_check_constraint>`
+fixes those problems by:
+
+- Having a custom forward operation that will only attempt to drop the
+  constraint if the constraint exists.
+- Having a custom backward operation that will add the constraint back
+  without blocking any reads/writes. This is achieved through the same
+  strategy of :ref:`SaferAddCheckConstraint <safer_add_check_constraint>`.
+
+.. _guide_how_to_use_safer_remove_check_constraint:
+
+How to use :ref:`SaferRemoveCheckConstraint <safer_remove_check_constraint>`
+____________________________________________________________________________
+
+1. Remove the check constraint in the relevant model as you would:
+
+.. code-block:: diff
+
+       class Meta:
+           constraints = (
+              ...
+  -           models.CheckConstraint(
+  -             check=~Q(id=42),
+  -             name="id_cannot_be_42"
+  -           ),
+           )
+
+2. Make the new migration:
+
+.. code-block:: bash
+
+  ./manage.py makemigrations
+
+3. The only changes you need to perform are:
+
+  1. Swap Django's ``RemoveConstraint`` for this package's
+     ``SaferRemoveCheckConstraint`` operation
+  2. Use a non-atomic migration.
+
+.. code-block:: diff
+
+  + from django_pg_migration_tools import operations
+  from django.db import migrations
+
+
+  class Migration(migrations.Migration):
+  +   atomic = False
+
+      dependencies = [("myapp", "0042_dependency")]
+
+      operations = [
+  -        migrations.RemoveConstraint(
+  +        operations.SaferRemoveCheckConstraint(
+              model_name="mymodel",
+              name="id_cannot_be_42",
+          ),
+      ]

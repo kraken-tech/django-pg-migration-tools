@@ -190,6 +190,8 @@ Class Definitions
     - :ref:`Instructions on how to use this class in a migration
       <guide_how_to_use_safer_add_check_constraint>`.
 
+.. _safer_remove_check_constraint:
+
 .. py:class:: SaferRemoveCheckConstraint(model_name: str, name: str)
 
     Provides a way to drop a check constraint in a safer and idempotent
@@ -203,66 +205,11 @@ Class Definitions
     **Why use this SaferRemoveCheckConstraint operation?**
     ------------------------------------------------------
 
-    The operation that Django provides (``RemoveConstraint``) has the
-    following limitations:
+    - :ref:`Explanation guide behind the need for this class
+      <guide_removing_a_check_constraint>`.
 
-    1. The operation fails if the constraint has already been removed.
-    2. When reverting, the alter table statement provided by Django to recreate
-       the constraint will block reads and writes on the table.
-
-    This custom operation fixes those problems by:
-
-    - Having a custom forward operation that will only attempt to drop the
-      constraint if the constraint exists.
-    - Having a custom backward operation that will add the constraint back
-      without blocking any reads/writes. This is achieved through the same
-      strategy of :ref:`SaferAddCheckConstraint <safer_add_check_constraint>`.
-
-    How to use
-    ----------
-
-    1. Remove the check constraint in the relevant model as you would:
-
-    .. code-block:: diff
-
-           class Meta:
-               constraints = (
-                  ...
-      -           models.CheckConstraint(
-      -             check=~Q(id=42),
-      -             name="id_cannot_be_42"
-      -           ),
-               )
-
-    2. Make the new migration:
-
-    .. code-block:: bash
-
-      ./manage.py makemigrations
-
-    3. The only changes you need to perform are: (i) swap Django's
-       ``RemoveConstraint`` for this package's ``SaferRemoveCheckConstraint``
-       operation, and (ii) use a non-atomic migration.
-
-    .. code-block:: diff
-
-      + from django_pg_migration_tools import operations
-      from django.db import migrations
-
-
-      class Migration(migrations.Migration):
-      +   atomic = False
-
-          dependencies = [("myapp", "0042_dependency")]
-
-          operations = [
-      -        migrations.RemoveConstraint(
-      +        operations.SaferRemoveCheckConstraint(
-                  model_name="mymodel",
-                  name="id_cannot_be_42",
-              ),
-          ]
-
+    - :ref:`Instructions on how to use this class in a migration
+      <guide_how_to_use_safer_remove_check_constraint>`.
 
 .. _safer_add_field_one_to_one:
 
