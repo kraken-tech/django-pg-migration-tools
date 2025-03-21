@@ -8,6 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- `SaferAddFieldForeignKey` did not work correctly when the primary key field
+  on the referred table had a column name that different from the field name.
+
 ## [0.1.18] - 2025-02-11
 
 ### Fixed

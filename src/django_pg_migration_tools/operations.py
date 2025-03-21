@@ -1382,6 +1382,7 @@ class ForeignKeyManager(base_operations.Operation):
     def _alter_table_add_not_valid_fk(self) -> None:
         remote_model = self._get_remote_model()
         remote_pk_field = self._get_remote_pk_field()
+        referred_column_name = remote_pk_field.db_column or remote_pk_field.name
         self.schema_editor.execute(
             psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK)
             .format(
@@ -1389,7 +1390,7 @@ class ForeignKeyManager(base_operations.Operation):
                 column_name=psycopg_sql.Identifier(self.column_name),
                 constraint_name=psycopg_sql.Identifier(self.constraint_name),
                 referred_table_name=psycopg_sql.Identifier(remote_model._meta.db_table),
-                referred_column_name=psycopg_sql.Identifier(remote_pk_field.name),
+                referred_column_name=psycopg_sql.Identifier(referred_column_name),
             )
             .as_string(self.schema_editor.connection.connection)
         )
