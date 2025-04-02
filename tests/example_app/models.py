@@ -22,6 +22,10 @@ class IntModel(models.Model):
     int_field = models.IntegerField(default=0)
 
 
+class IntModelWithExplicitPK(models.Model):
+    explicit_pk = models.IntegerField(primary_key=True, db_column="id32")
+
+
 class ModelWithForeignKey(models.Model):
     fk = models.ForeignKey(IntModel, null=True, on_delete=models.CASCADE)
 
