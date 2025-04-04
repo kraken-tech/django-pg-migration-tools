@@ -33,7 +33,7 @@ test:
 .PHONY:coverage_run
 coverage_run:
 	coverage run --branch \
-	--include=src/django_pg_migration_tools/* \
+	--include=src/django_pg_migration_tools/*,tests/django_pg_migration_tools/* \
 	--data-file=$(COVERAGE_FILE) \
 	-m pytest
 
