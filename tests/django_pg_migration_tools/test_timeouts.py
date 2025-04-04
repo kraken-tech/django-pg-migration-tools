@@ -42,7 +42,7 @@ class _Leaky:
         # Note that the code below is never reached, so the atomic
         # block is never exited, just like what the Django migrator
         # does!
-        self.atomic.__exit__(exc_type, exc_value, traceback)
+        self.atomic.__exit__(exc_type, exc_value, traceback)  # pragma: no cover
 
 
 class TestApplyTimeouts:
@@ -64,7 +64,7 @@ class TestApplyTimeouts:
                 lock_timeout=lock_timeout,
                 statement_timeout=statement_timeout,
             ):
-                pass
+                pass  # pragma: no cover
 
     def test_raises_when_timeouts_not_provided(self) -> None:
         with pytest.raises(timeouts.TimeoutNotProvided):
@@ -73,7 +73,7 @@ class TestApplyTimeouts:
                 lock_timeout=None,
                 statement_timeout=None,
             ):
-                pass
+                pass  # pragma: no cover
 
     @pytest.mark.parametrize(
         "lock_timeout, statement_timeout",
@@ -97,7 +97,7 @@ class TestApplyTimeouts:
                 lock_timeout=lock_timeout,
                 statement_timeout=statement_timeout,
             ):
-                pass
+                pass  # pragma: no cover
 
     @mock.patch("django_pg_migration_tools.timeouts.connections", mock.MagicMock())
     @mock.patch(
@@ -157,7 +157,7 @@ class TestApplyTimeouts:
                 lock_timeout=datetime.timedelta(seconds=1),
                 close_transaction_leak=True,
             ):
-                pass
+                pass  # pragma: no cover
 
     @pytest.mark.django_db
     @mock.patch(
@@ -191,7 +191,9 @@ class TestApplyTimeouts:
                 close_transaction_leak=False,
             ):
                 try:
-                    with _Leaky():
+                    # _Leaky _always_ raises an exception, so we always go to
+                    # the Exception block below (no coverage branching).
+                    with _Leaky():  # pragma: no cover
                         pass
                 except Exception:
                     # We handle the exception, so that the db.timeouts finally
