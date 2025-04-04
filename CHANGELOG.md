@@ -8,6 +8,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.19] - 2025-04-04
+
 ### Fixed
 
 - `SaferAddFieldForeignKey` did not work correctly when the primary key field
