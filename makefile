@@ -18,6 +18,9 @@ help:
 	@echo "  matrix_test: Run matrix testing locally."
 	@echo "  test: Run tests locally."
 	@echo "  update: Update package dependencies."
+	@echo "  version_major: Bump the project's version number to next major version."
+	@echo "  version_minor: Bump the project's version number to next minor version."
+	@echo "  version_patch: Bump the project's version number to next patch version."
 
 # Standard entry points
 # =====================
@@ -91,6 +94,21 @@ clean:
 .PHONY:package
 package:
 	python -m build
+
+.PHONY:version_major
+version_major:
+	bump-my-version bump major
+	@echo Version number updated to `bump-my-version show current_version`
+
+.PHONY:version_minor
+version_minor:
+	bump-my-version bump minor
+	@echo Version number updated to `bump-my-version show current_version`
+
+.PHONY:version_patch
+version_patch:
+	bump-my-version bump patch
+	@echo Version number updated to `bump-my-version show current_version`
 
 # Implementation details
 # ======================
