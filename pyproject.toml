@@ -87,6 +87,7 @@ dev = [
 
     # Packaging
     "build>=1.2.1",
+    "bump-my-version>=1.1.2",
 ]
 
 # Ruff
@@ -168,3 +169,41 @@ DJANGO_SETTINGS_MODULE = "tests.example_app.settings"
 exclude_also = [
     '@overload',
 ]
+
+# Bump My Version
+# ---------------
+
+[tool.bumpversion]
+# Do not manually edit the version, use `make version_{type}` instead.
+current_version = "0.1.19"
+
+# Relabel the Unreleased section of the changelog and add a new unreleased section as a reminder to
+# add to it.
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.md"
+search = "## [Unreleased]"
+replace = "## [Unreleased]\n\n_No notable unreleased changes_\n\n## [{new_version}] - {now:%Y-%m-%d}"
+
+# The next three sections are used to update the GitHub links at the bottom of CHANGELOG.md
+
+# Change the most recent `compare` link to end at the new version rather than HEAD
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.md"
+search = "...HEAD"
+replace = "...v{new_version}"
+ignore_missing_version = true
+
+# The first time bump version is run we need to change a `commits` link rather than a `compare` one.
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.md"
+search = "commits/HEAD"
+replace = "commits/v{new_version}"
+ignore_missing_version = true
+
+# Relabel the latest `compare` line and insert a new one for unreleased changes after this version.
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.md"
+search = "[Unreleased]:"
+replace = """\
+[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v{new_version}...HEAD
+[{new_version}]:"""

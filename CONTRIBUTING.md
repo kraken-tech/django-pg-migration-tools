@@ -164,8 +164,17 @@ whenever a tag is pushed for a new version; the tag must start with v.
 
 To publish a new version of this package:
 
-1. Update the version in pyproject.toml.
-2. Check all changes have been recorded in the changelog.
+1. Check all changes have been recorded in the "Unreleased" section of the
+changelog.
+2. Bump the project version by running one of the following commands:
+   ```sh
+   make version_major
+   make version_minor
+   make version_patch
+   ```
+   This will automatically update the `pyproject.toml` file with the new
+   version number, and it will move the changelog notes under "Unreleased" to
+   the new version.
 3. Add a heading in the changelog for the new version, including today's date.
 4. Check if the README.md "Main Features" section needs updating.
 5. Commit the changes and open a PR.
