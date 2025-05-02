@@ -201,7 +201,7 @@ _No notable unreleased changes_
 - `SaferAddIndexConcurrently` migration operation to create new Postgres
   indexes in a safer, idempotent way.
 
-[Unreleased]: https://github.com/kraken-tech/django-pg-migration-tools/compare/v1.1.19...HEAD
+[Unreleased]: https://github.com/kraken-tech/django-pg-migration-tools/compare/v0.1.19...HEAD
 [0.1.19]: https://github.com/kraken-tech/django-pg-migration-tools/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/kraken-tech/django-pg-migration-tools/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/kraken-tech/django-pg-migration-tools/compare/v0.1.16...v0.1.17
