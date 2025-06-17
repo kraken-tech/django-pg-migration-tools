@@ -506,7 +506,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
             )
             return
 
-        if not self._constraint_exists(schema_editor, constraint):
+        if not self._constraint_exists(schema_editor, constraint, collect_default=True):
             # Nothing to delete.
             return
 
@@ -591,7 +591,9 @@ class SafeConstraintOperationManager(base_operations.Operation):
         constraint: models.UniqueConstraint,
         raise_if_exists: bool,
     ) -> bool:
-        constraint_exists = self._constraint_exists(schema_editor, constraint)
+        constraint_exists = self._constraint_exists(
+            schema_editor, constraint, collect_default=False
+        )
         if raise_if_exists and constraint_exists:
             raise ConstraintAlreadyExists(
                 f"Cannot create a constraint with the name "
@@ -619,7 +621,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
         self,
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         constraint: models.UniqueConstraint | models.CheckConstraint,
-        collect_default: bool = False,
+        collect_default: bool,
     ) -> bool:
         return _run_introspection_query(
             schema_editor,
