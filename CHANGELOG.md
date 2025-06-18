@@ -8,7 +8,13 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
-_No notable unreleased changes_
+### Fixed
+
+- `SaferRemoveUniqueConstraint` now produces the best-effort plan for a migration that would be
+  performed if the constraint wanting to be removed does in fact exist when running `sqlmigrate`.
+  Previously, this would act as if the constraint did not exist is using `sqlmigrate`.
+- `SaferAddUniqueConstraint` now produces a backwards plan as if the constraint has already been
+   created when running `sqlmigrate`.
 
 ## [0.1.19] - 2025-04-04
 

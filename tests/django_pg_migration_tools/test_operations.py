@@ -910,6 +910,41 @@ class TestSaferAddUniqueConstraint:
             == 'ALTER TABLE "example_app_intmodel" ADD CONSTRAINT "unique_int_field" UNIQUE USING INDEX "unique_int_field";'
         )
 
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only_reversed(self):
+        # Prove that the constraint exists before the operation removes it.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                .format(constraint_name=psycopg_sql.Literal("unique_char_field"))
+                .as_string(cursor.connection)
+            )
+            assert cursor.fetchone()
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddUniqueConstraint(
+            model_name="charmodel",
+            constraint=UniqueConstraint(
+                fields=("char_field",),
+                name="unique_char_field",
+            ),
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+        assert len(editor.collected_sql) == 1
+        assert len(queries) == 0
+        assert editor.collected_sql[0] == (
+            'ALTER TABLE "example_app_charmodel" DROP CONSTRAINT "unique_char_field";'
+        )
+
     # Disable the overall test transaction because a unique concurrent index
     # creation followed by a constraint addition cannot be triggered/tested
     # inside of a transaction.
@@ -1575,6 +1610,38 @@ class TestSaferRemoveUniqueConstraint:
         # No queries have run, because the migration wasn't allowed to run by
         # the router.
         assert len(queries) == 0
+
+    @pytest.mark.django_db(transaction=True)
+    def test_when_collecting_only(self):
+        # Prove that the constraint exists before the operation removes it.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                .format(constraint_name=psycopg_sql.Literal("unique_char_field"))
+                .as_string(cursor.connection)
+            )
+            assert cursor.fetchone()
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveUniqueConstraint(
+            model_name="charmodel",
+            name="unique_char_field",
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+        assert len(editor.collected_sql) == 1
+        assert len(queries) == 0
+        assert editor.collected_sql[0] == (
+            'ALTER TABLE "example_app_charmodel" DROP CONSTRAINT "unique_char_field";'
+        )
 
     @pytest.mark.django_db(transaction=True)
     def test_does_nothing_if_constraint_does_not_exist(self):
