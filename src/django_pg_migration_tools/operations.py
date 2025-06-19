@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-from textwrap import dedent
 from typing import Any, cast, overload
 
 from django.contrib.postgres import operations as psql_operations
@@ -11,6 +10,8 @@ from django.db.backends.base import schema as base_schema
 from django.db.migrations.operations import base as base_operations
 from django.db.migrations.operations import fields as operation_fields
 from django.db.migrations.operations import models as operation_models
+
+from . import _queries
 
 
 MAX_POSTGRES_IDENTIFIER_LEN = 63
@@ -22,123 +23,6 @@ except ImportError:  # pragma: no cover
         from psycopg2 import sql as psycopg_sql  # type: ignore[no-redef]
     except ImportError:
         raise ImportError("Neither psycopg2 nor psycopg (3) is installed.")
-
-
-class TimeoutQueries:
-    SHOW_LOCK_TIMEOUT = "SHOW lock_timeout;"
-    SET_LOCK_TIMEOUT = "SET lock_timeout = {lock_timeout};"
-
-
-class IndexQueries:
-    CHECK_INVALID_INDEX = dedent("""
-        SELECT relname
-        FROM pg_class, pg_index
-        WHERE (
-            pg_index.indisvalid = false
-            AND pg_index.indexrelid = pg_class.oid
-            AND relname = {index_name}
-        );
-    """)
-    DROP_INDEX = "DROP INDEX CONCURRENTLY IF EXISTS {index_name};"
-    CHECK_VALID_INDEX = dedent("""
-        SELECT 1
-        FROM pg_class, pg_index
-        WHERE (
-            pg_index.indisvalid = true
-            AND pg_index.indexrelid = pg_class.oid
-            AND relname = {index_name}
-        );
-    """)
-
-
-class ConstraintQueries:
-    CHECK_EXISTING_CONSTRAINT = dedent("""
-        SELECT conname
-        FROM pg_catalog.pg_constraint
-        WHERE conname = {constraint_name};
-    """)
-
-    CHECK_CONSTRAINT_IS_VALID = dedent("""
-        SELECT 1
-        FROM pg_catalog.pg_constraint
-        WHERE
-            conname = {constraint_name}
-            AND convalidated IS TRUE;
-    """)
-
-    CHECK_CONSTRAINT_IS_NOT_VALID = dedent("""
-        SELECT 1
-        FROM pg_catalog.pg_constraint
-        WHERE
-            conname = {constraint_name}
-            AND convalidated IS FALSE;
-    """)
-
-    ALTER_TABLE_CONSTRAINT_NOT_NULL_NOT_VALID = dedent("""
-        ALTER TABLE {table_name}
-        ADD CONSTRAINT {constraint_name}
-        CHECK ({column_name} IS NOT NULL) NOT VALID;
-    """)
-
-    ALTER_TABLE_DROP_CONSTRAINT = dedent("""
-        ALTER TABLE {table_name}
-        DROP CONSTRAINT {constraint_name};
-    """)
-
-    ALTER_TABLE_VALIDATE_CONSTRAINT = dedent("""
-        ALTER TABLE {table_name}
-        VALIDATE CONSTRAINT {constraint_name};
-    """)
-
-    ALTER_TABLE_ADD_NOT_VALID_FK = dedent("""
-        ALTER TABLE {table_name}
-        ADD CONSTRAINT {constraint_name} FOREIGN KEY ({column_name})
-        REFERENCES {referred_table_name} ({referred_column_name})
-        DEFERRABLE INITIALLY DEFERRED
-        NOT VALID;
-    """)
-
-
-class ColumnQueries:
-    ALTER_TABLE_ADD_NULL_COLUMN = dedent("""
-        ALTER TABLE {table_name}
-        ADD COLUMN IF NOT EXISTS {column_name}
-        {column_type} NULL;
-    """)
-    ALTER_TABLE_DROP_COLUMN = dedent("""
-        ALTER TABLE {table_name}
-        DROP COLUMN {column_name};
-    """)
-    CHECK_COLUMN_EXISTS = dedent("""
-        SELECT 1
-        FROM pg_catalog.pg_attribute
-        WHERE
-            attrelid = {table_name}::regclass
-            AND attname = {column_name};
-    """)
-
-
-class NullabilityQueries:
-    IS_COLUMN_NOT_NULL = dedent("""
-        SELECT 1
-        FROM pg_catalog.pg_attribute
-        WHERE
-            attrelid = {table_name}::regclass
-            AND attname = {column_name}
-            AND attnotnull IS TRUE;
-    """)
-
-    ALTER_TABLE_SET_NOT_NULL = dedent("""
-        ALTER TABLE {table_name}
-        ALTER COLUMN {column_name}
-        SET NOT NULL;
-    """)
-
-    ALTER_TABLE_DROP_NOT_NULL = dedent("""
-        ALTER TABLE {table_name}
-        ALTER COLUMN {column_name}
-        DROP NOT NULL;
-    """)
 
 
 @overload
@@ -310,7 +194,7 @@ class SafeIndexOperationManager(
         self, schema_editor: base_schema.BaseDatabaseSchemaEditor, value: str
     ) -> None:
         schema_editor.execute(
-            psycopg_sql.SQL(TimeoutQueries.SET_LOCK_TIMEOUT)
+            psycopg_sql.SQL(_queries.TimeoutQueries.SET_LOCK_TIMEOUT)
             .format(lock_timeout=psycopg_sql.Literal(value))
             .as_string(schema_editor.connection.connection)
         )
@@ -321,7 +205,7 @@ class SafeIndexOperationManager(
     ) -> str:
         return _run_introspection_query(
             schema_editor,
-            psycopg_sql.SQL(TimeoutQueries.SHOW_LOCK_TIMEOUT).as_string(
+            psycopg_sql.SQL(_queries.TimeoutQueries.SHOW_LOCK_TIMEOUT).as_string(
                 schema_editor.connection.connection
             ),
             collect_default="0",
@@ -350,13 +234,13 @@ class SafeIndexOperationManager(
         cursor = schema_editor.connection.cursor()
         result = _run_introspection_query(
             schema_editor,
-            psycopg_sql.SQL(IndexQueries.CHECK_INVALID_INDEX)
+            psycopg_sql.SQL(_queries.IndexQueries.CHECK_INVALID_INDEX)
             .format(index_name=psycopg_sql.Literal(index_name))
             .as_string(schema_editor.connection.connection),
         )
         if result:
             cursor.execute(
-                psycopg_sql.SQL(IndexQueries.DROP_INDEX)
+                psycopg_sql.SQL(_queries.IndexQueries.DROP_INDEX)
                 .format(index_name=psycopg_sql.Identifier(index_name))
                 .as_string(schema_editor.connection.connection)
             )
@@ -577,7 +461,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
     ) -> None:
         schema_editor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
+            psycopg_sql.SQL(_queries.ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
             .format(
                 table_name=psycopg_sql.Identifier(model._meta.db_table),
                 constraint_name=psycopg_sql.Identifier(constraint.name),
@@ -625,7 +509,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
     ) -> bool:
         return _run_introspection_query(
             schema_editor,
-            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
             .format(constraint_name=psycopg_sql.Literal(constraint.name))
             .as_string(schema_editor.connection.connection),
             collect_default=collect_default,
@@ -638,7 +522,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
     ) -> bool:
         return _run_introspection_query(
             schema_editor,
-            psycopg_sql.SQL(ConstraintQueries.CHECK_CONSTRAINT_IS_NOT_VALID)
+            psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_CONSTRAINT_IS_NOT_VALID)
             .format(constraint_name=psycopg_sql.Literal(constraint.name))
             .as_string(schema_editor.connection.connection),
         )
@@ -982,7 +866,9 @@ class NullsManager(base_operations.Operation):
         constraint_name: str,
     ) -> None:
         schema_editor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_CONSTRAINT_NOT_NULL_NOT_VALID)
+            psycopg_sql.SQL(
+                _queries.ConstraintQueries.ALTER_TABLE_CONSTRAINT_NOT_NULL_NOT_VALID
+            )
             .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 column_name=psycopg_sql.Identifier(column_name),
@@ -999,7 +885,7 @@ class NullsManager(base_operations.Operation):
     ) -> bool:
         return _run_introspection_query(
             schema_editor,
-            psycopg_sql.SQL(NullabilityQueries.IS_COLUMN_NOT_NULL)
+            psycopg_sql.SQL(_queries.NullabilityQueries.IS_COLUMN_NOT_NULL)
             .format(
                 table_name=psycopg_sql.Literal(table_name),
                 column_name=psycopg_sql.Literal(column_name),
@@ -1027,7 +913,7 @@ class NullsManager(base_operations.Operation):
     ) -> bool:
         return _run_introspection_query(
             schema_editor,
-            psycopg_sql.SQL(ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+            psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
             .format(constraint_name=psycopg_sql.Literal(constraint_name))
             .as_string(schema_editor.connection.connection),
         )
@@ -1039,7 +925,7 @@ class NullsManager(base_operations.Operation):
         column_name: str,
     ) -> None:
         schema_editor.execute(
-            psycopg_sql.SQL(NullabilityQueries.ALTER_TABLE_SET_NOT_NULL)
+            psycopg_sql.SQL(_queries.NullabilityQueries.ALTER_TABLE_SET_NOT_NULL)
             .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 column_name=psycopg_sql.Identifier(column_name),
@@ -1054,7 +940,7 @@ class NullsManager(base_operations.Operation):
         column_name: str,
     ) -> None:
         schema_editor.execute(
-            psycopg_sql.SQL(NullabilityQueries.ALTER_TABLE_DROP_NOT_NULL)
+            psycopg_sql.SQL(_queries.NullabilityQueries.ALTER_TABLE_DROP_NOT_NULL)
             .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 column_name=psycopg_sql.Identifier(column_name),
@@ -1069,7 +955,7 @@ class NullsManager(base_operations.Operation):
         constraint_name: str,
     ) -> None:
         schema_editor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_DROP_CONSTRAINT)
+            psycopg_sql.SQL(_queries.ConstraintQueries.ALTER_TABLE_DROP_CONSTRAINT)
             .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 constraint_name=psycopg_sql.Identifier(constraint_name),
@@ -1084,7 +970,7 @@ class NullsManager(base_operations.Operation):
     ) -> bool:
         return _run_introspection_query(
             schema_editor,
-            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
             .format(constraint_name=psycopg_sql.Literal(constraint_name))
             .as_string(schema_editor.connection.connection),
         )
@@ -1096,7 +982,7 @@ class NullsManager(base_operations.Operation):
         constraint_name: str,
     ) -> None:
         schema_editor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
+            psycopg_sql.SQL(_queries.ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
             .format(
                 table_name=psycopg_sql.Identifier(table_name),
                 constraint_name=psycopg_sql.Identifier(constraint_name),
@@ -1278,7 +1164,7 @@ class ForeignKeyManager(base_operations.Operation):
     def _column_exists(self, collect_default: bool = False) -> bool:
         return _run_introspection_query(
             self.schema_editor,
-            psycopg_sql.SQL(ColumnQueries.CHECK_COLUMN_EXISTS)
+            psycopg_sql.SQL(_queries.ColumnQueries.CHECK_COLUMN_EXISTS)
             .format(
                 table_name=psycopg_sql.Literal(self.table_name),
                 column_name=psycopg_sql.Literal(self.column_name),
@@ -1313,7 +1199,7 @@ class ForeignKeyManager(base_operations.Operation):
 
     def _alter_table_add_null_column(self) -> None:
         self.schema_editor.execute(
-            psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_ADD_NULL_COLUMN)
+            psycopg_sql.SQL(_queries.ColumnQueries.ALTER_TABLE_ADD_NULL_COLUMN)
             .format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 column_name=psycopg_sql.Identifier(self.column_name),
@@ -1325,7 +1211,7 @@ class ForeignKeyManager(base_operations.Operation):
     def _valid_index_exists(self) -> bool:
         return _run_introspection_query(
             self.schema_editor,
-            psycopg_sql.SQL(IndexQueries.CHECK_VALID_INDEX)
+            psycopg_sql.SQL(_queries.IndexQueries.CHECK_VALID_INDEX)
             .format(index_name=psycopg_sql.Literal(self.index_builder.name))
             .as_string(self.schema_editor.connection.connection),
         )
@@ -1368,7 +1254,7 @@ class ForeignKeyManager(base_operations.Operation):
     def _constraint_exists(self) -> bool:
         return _run_introspection_query(
             self.schema_editor,
-            psycopg_sql.SQL(ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+            psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
             .format(constraint_name=psycopg_sql.Literal(self.constraint_name))
             .as_string(self.schema_editor.connection.connection),
         )
@@ -1376,7 +1262,7 @@ class ForeignKeyManager(base_operations.Operation):
     def _is_constraint_valid(self) -> bool:
         return _run_introspection_query(
             self.schema_editor,
-            psycopg_sql.SQL(ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+            psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
             .format(constraint_name=psycopg_sql.Literal(self.constraint_name))
             .as_string(self.schema_editor.connection.connection),
         )
@@ -1386,7 +1272,7 @@ class ForeignKeyManager(base_operations.Operation):
         remote_pk_field = self._get_remote_pk_field()
         referred_column_name = remote_pk_field.db_column or remote_pk_field.name
         self.schema_editor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK)
+            psycopg_sql.SQL(_queries.ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK)
             .format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 column_name=psycopg_sql.Identifier(self.column_name),
@@ -1399,7 +1285,7 @@ class ForeignKeyManager(base_operations.Operation):
 
     def _alter_table_validate_constraint(self) -> None:
         self.schema_editor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
+            psycopg_sql.SQL(_queries.ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
             .format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 constraint_name=psycopg_sql.Identifier(self.constraint_name),
@@ -1409,7 +1295,7 @@ class ForeignKeyManager(base_operations.Operation):
 
     def _alter_table_drop_column(self) -> None:
         self.schema_editor.execute(
-            psycopg_sql.SQL(ColumnQueries.ALTER_TABLE_DROP_COLUMN)
+            psycopg_sql.SQL(_queries.ColumnQueries.ALTER_TABLE_DROP_COLUMN)
             .format(
                 table_name=psycopg_sql.Identifier(self.table_name),
                 column_name=psycopg_sql.Identifier(self.column_name),

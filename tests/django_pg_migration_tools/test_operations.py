@@ -14,7 +14,7 @@ from django.db.migrations.state import (
 from django.db.models import BaseConstraint, Index, Q, UniqueConstraint
 from django.test import override_settings, utils
 
-from django_pg_migration_tools import operations
+from django_pg_migration_tools import _queries, operations
 from tests.example_app.models import (
     AnotherCharModel,
     CharIDModel,
@@ -144,7 +144,7 @@ class TestSaferAddIndexConcurrently:
     # Disable the overall test transaction because a concurrent index cannot
     # be triggered/tested inside of a transaction.
     @pytest.mark.django_db(transaction=True)
-    def test_add(self):
+    def test_add(self, delete_index_after_creation):
         with connection.cursor() as cursor:
             # We first create the index and set it to invalid, to make sure it
             # will be removed automatically by the operation before re-creating
@@ -158,7 +158,7 @@ class TestSaferAddIndexConcurrently:
         # Prove that the invalid index exists before the operation runs:
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.IndexQueries.CHECK_INVALID_INDEX)
+                psycopg_sql.SQL(_queries.IndexQueries.CHECK_INVALID_INDEX)
                 .format(index_name=psycopg_sql.Literal("int_field_idx"))
                 .as_string(cursor.connection)
             )
@@ -207,7 +207,7 @@ class TestSaferAddIndexConcurrently:
 
         # Assert the lock_timeout has been set back to the default (1s)
         with connection.cursor() as cursor:
-            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
+            cursor.execute(_queries.TimeoutQueries.SHOW_LOCK_TIMEOUT)
             assert cursor.fetchone()[0] == "1s"
 
         # Assert on the sequence of expected SQL queries:
@@ -298,7 +298,7 @@ class TestSaferAddIndexConcurrently:
         # Prove that the invalid index exists before the operation runs:
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.IndexQueries.CHECK_INVALID_INDEX)
+                psycopg_sql.SQL(_queries.IndexQueries.CHECK_INVALID_INDEX)
                 .format(index_name=psycopg_sql.Literal("int_field_idx"))
                 .as_string(cursor.connection)
             )
@@ -427,7 +427,7 @@ class TestSaferRemoveIndexConcurrently:
 
         # Prove that the lock_timeout has been set back to the default (1s)
         with connection.cursor() as cursor:
-            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
+            cursor.execute(_queries.TimeoutQueries.SHOW_LOCK_TIMEOUT)
             assert cursor.fetchone()[0] == "1s"
 
         # Assert on the sequence of expected SQL queries:
@@ -572,7 +572,7 @@ class TestSaferAddUniqueConstraint:
         # Prove that the invalid unique index exists before the operation runs:
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.IndexQueries.CHECK_INVALID_INDEX)
+                psycopg_sql.SQL(_queries.IndexQueries.CHECK_INVALID_INDEX)
                 .format(index_name=psycopg_sql.Literal("unique_int_field"))
                 .as_string(cursor.connection)
             )
@@ -581,7 +581,7 @@ class TestSaferAddUniqueConstraint:
         # Prove that the constraint does **not** already exist.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("unique_int_field"))
                 .as_string(cursor.connection)
             )
@@ -655,7 +655,7 @@ class TestSaferAddUniqueConstraint:
 
         # Assert the lock_timeout has been set back to the default (1s)
         with connection.cursor() as cursor:
-            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
+            cursor.execute(_queries.TimeoutQueries.SHOW_LOCK_TIMEOUT)
             assert cursor.fetchone()[0] == "1s"
 
         # Assert on the sequence of expected SQL queries:
@@ -756,13 +756,13 @@ class TestSaferAddUniqueConstraint:
         #   - The constraint doesn't exist yet.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.IndexQueries.CHECK_INVALID_INDEX)
+                psycopg_sql.SQL(_queries.IndexQueries.CHECK_INVALID_INDEX)
                 .format(index_name=psycopg_sql.Literal("unique_int_field"))
                 .as_string(cursor.connection)
             )
             assert not cursor.fetchone()
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("unique_int_field"))
                 .as_string(cursor.connection)
             )
@@ -915,7 +915,7 @@ class TestSaferAddUniqueConstraint:
         # Prove that the constraint exists before the operation removes it.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("unique_char_field"))
                 .as_string(cursor.connection)
             )
@@ -993,13 +993,13 @@ class TestSaferAddUniqueConstraint:
         #   - The constraint doesn't exist yet.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.IndexQueries.CHECK_INVALID_INDEX)
+                psycopg_sql.SQL(_queries.IndexQueries.CHECK_INVALID_INDEX)
                 .format(index_name=psycopg_sql.Literal("unique_int_field"))
                 .as_string(cursor.connection)
             )
             assert not cursor.fetchone()
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("unique_int_field"))
                 .as_string(cursor.connection)
             )
@@ -1355,7 +1355,7 @@ class TestSaferRemoveUniqueConstraint:
         # Prove that the constraint exists before the operation removes it.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("unique_char_field"))
                 .as_string(cursor.connection)
             )
@@ -1399,7 +1399,7 @@ class TestSaferRemoveUniqueConstraint:
         # Prove the constraint is not there any longer.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("unique_char_field"))
                 .as_string(cursor.connection)
             )
@@ -3527,7 +3527,7 @@ class TestSaferAddCheckConstraint:
         # Prove that the constraint does **not** already exist.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("positive_int"))
                 .as_string(cursor.connection)
             )
@@ -3596,7 +3596,7 @@ class TestSaferAddCheckConstraint:
         # Verify that the constraint now exists and is valid.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
                 .format(constraint_name=psycopg_sql.Literal("positive_int"))
                 .as_string(cursor.connection)
             )
@@ -4578,7 +4578,7 @@ class TestSaferRemoveCheckConstraint:
         # Prove that the constraint already exists
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("id_must_be_42"))
                 .as_string(cursor.connection)
             )
@@ -4639,7 +4639,7 @@ class TestSaferRemoveCheckConstraint:
         # Verify that the constraint was removed.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
                 .format(constraint_name=psycopg_sql.Literal("id_must_be_42"))
                 .as_string(cursor.connection)
             )
@@ -4692,7 +4692,7 @@ class TestSaferRemoveCheckConstraint:
         # Verify the constraint is there now
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
                 .format(constraint_name=psycopg_sql.Literal("id_must_be_42"))
                 .as_string(cursor.connection)
             )
@@ -4751,7 +4751,7 @@ class TestSaferRemoveCheckConstraint:
         # collecting sql statements and nothing has been deleted for real.
         with connection.cursor() as cursor:
             cursor.execute(
-                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
+                psycopg_sql.SQL(_queries.ConstraintQueries.CHECK_CONSTRAINT_IS_VALID)
                 .format(constraint_name=psycopg_sql.Literal("id_must_be_42"))
                 .as_string(cursor.connection)
             )
