@@ -412,12 +412,12 @@ class SafeConstraintOperationManager(base_operations.Operation):
 
         index = self._get_index_for_constraint(constraint)
 
-        if constraint.condition is not None:
+        if (constraint.condition is not None) or constraint.expressions:
             """
-            Unique constraints with conditions do not exist in postgres.
+            Unique constraints with conditions/expressions do not exist in postgres.
 
-            As of writing Django handles these as unique indexes with conditions only
-            in the auto generated operation, so we only create the index and finish here
+            As of writing Django handles these as unique indexes with conditions/expressions
+            only in the auto generated operation, so we only create the index and finish here
             """
             SafeIndexOperationManager().safer_create_index(
                 app_label=app_label,
@@ -491,9 +491,9 @@ class SafeConstraintOperationManager(base_operations.Operation):
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        if constraint.condition is not None:
-            # If condition is present on the constraint, it would have been created
-            # as an index instead, so index is instead removed
+        if (constraint.condition is not None) or constraint.expressions:
+            # If condition/expressions are present on the constraint, it would have
+            # been created as an index instead, so index is instead removed
             index = self._get_index_for_constraint(constraint)
 
             SafeIndexOperationManager().safer_drop_index(

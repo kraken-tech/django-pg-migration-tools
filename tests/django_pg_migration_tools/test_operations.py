@@ -11,12 +11,11 @@ from django.db.migrations.state import (
     ModelState,
     ProjectState,
 )
-from django.db.models import BaseConstraint, Index, Q, UniqueConstraint
+from django.db.models import BaseConstraint, F, Index, Q, UniqueConstraint, functions
 from django.test import override_settings, utils
 
 from django_pg_migration_tools import operations
 from tests.example_app.models import (
-    AnotherCharModel,
     CharIDModel,
     CharModel,
     IntModel,
@@ -26,6 +25,8 @@ from tests.example_app.models import (
     NotNullIntFieldModel,
     NullFKFieldModel,
     NullIntFieldModel,
+    UniqueConditionCharModel,
+    UniqueExpressionCharModel,
     get_check_constraint,
 )
 
@@ -1306,6 +1307,117 @@ class TestSaferAddUniqueConstraint:
             )
             assert not cursor.fetchone()
 
+    @pytest.mark.django_db(transaction=True)
+    def test_when_expression_on_constraint_only_creates_index(self):
+        constraint_name = "unique_expression_int_field"
+
+        # Prove that:
+        #   - An invalid index doesn't exist.
+        #   - The constraint/index doesn't exist yet.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_VALID_INDEX_EXISTS_QUERY,
+                {"index_name": constraint_name},
+            )
+            assert not cursor.fetchone()
+            # Also, set the lock_timeout to check it has been returned to
+            # its original value once the unique index creation is completed.
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddUniqueConstraint(
+            model_name="intmodel",
+            constraint=UniqueConstraint(
+                functions.Greatest(F("int_field"), 2),
+                name=constraint_name,
+            ),
+        )
+        operation.state_forwards(self.app_label, new_state)
+        # Proceed to add the unique index followed by the constraint:
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+        # Confirm that exists as index
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_INDEX_EXISTS_QUERY,
+                {
+                    "table_name": "example_app_intmodel",
+                    "index_name": constraint_name,
+                },
+            )
+            assert cursor.fetchone()
+
+        # Assert on the sequence of expected SQL queries:
+        #
+        # 1. Check the original lock_timeout value to be able to restore it
+        # later.
+        assert queries[0]["sql"] == "SHOW lock_timeout;"
+        # 2. Remove the timeout.
+        assert queries[1]["sql"] == "SET lock_timeout = '0';"
+        # 3. Verify if the index is invalid.
+        assert queries[2]["sql"] == dedent(
+            f"""
+            SELECT relname
+            FROM pg_class, pg_index
+            WHERE (
+                pg_index.indisvalid = false
+                AND pg_index.indexrelid = pg_class.oid
+                AND relname = '{constraint_name}'
+            );
+            """
+        )
+        # 4. Finally create the index concurrently.
+        assert (
+            queries[3]["sql"]
+            == f'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "{constraint_name}" ON "example_app_intmodel" ((GREATEST("int_field", 2)))'
+        )
+        # 6. Set the timeout back to what it was originally.
+        assert queries[4]["sql"] == "SET lock_timeout = '1s';"
+
+        # There are no additional queries
+        assert len(queries) == 5
+
+        # Reverse the migration to drop the index and constraint, and verify
+        # that the lock_timeout queries are correct.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+
+        # 2. perform the ALTER TABLE.
+        assert reverse_queries[0]["sql"] == "SHOW lock_timeout;"
+
+        # 3. Remove the timeout.
+        assert reverse_queries[1]["sql"] == "SET lock_timeout = '0';"
+        # 4. Verify if the index is invalid.
+        assert (
+            reverse_queries[2]["sql"]
+            == f'DROP INDEX CONCURRENTLY IF EXISTS "{constraint_name}"'
+        )
+
+        assert reverse_queries[3]["sql"] == "SET lock_timeout = '1s';"
+
+        assert len(reverse_queries) == 4
+
+        # Verify the index representing the constraint doesn't exist any more.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_INDEX_EXISTS_QUERY,
+                {
+                    "table_name": "example_app_intmodel",
+                    "index_name": constraint_name,
+                },
+            )
+            assert not cursor.fetchone()
+
 
 class TestBuildPostgresIdentifier:
     def test_happy_path(self):
@@ -1491,11 +1603,11 @@ class TestSaferRemoveUniqueConstraint:
             assert cursor.fetchone()
 
         project_state = ProjectState()
-        project_state.add_model(ModelState.from_model(AnotherCharModel))
+        project_state.add_model(ModelState.from_model(UniqueConditionCharModel))
         new_state = project_state.clone()
 
         operation = operations.SaferRemoveUniqueConstraint(
-            model_name="anothercharmodel",
+            model_name="uniqueconditioncharmodel",
             name=constraint_name,
         )
 
@@ -1570,7 +1682,112 @@ class TestSaferRemoveUniqueConstraint:
         # 4. Finally create the index concurrently.
         assert (
             reverse_queries[3]["sql"]
-            == f'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "{constraint_name}" ON "example_app_anothercharmodel" ("char_field") WHERE "char_field" IN (\'c\', \'something\')'
+            == f'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "{constraint_name}" ON "example_app_uniqueconditioncharmodel" ("char_field") WHERE "char_field" IN (\'c\', \'something\')'
+        )
+        # 5. Set the timeout back to what it was originally.
+        assert reverse_queries[4]["sql"] == "SET lock_timeout = '1s';"
+
+        # Nothing else.
+        assert len(reverse_queries) == 5
+
+    @pytest.mark.django_db(transaction=True)
+    def test_operation_where_expression_on_unique_constraint(self):
+        constraint_name = "unique_char_field_with_expression"
+
+        with connection.cursor() as cursor:
+            # Set the lock_timeout to check it has been returned to
+            # its original value once the index creation is completed.
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        # Prove that the constraint/index exists before the operation removes it.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_VALID_INDEX_EXISTS_QUERY,
+                {"index_name": constraint_name},
+            )
+            assert cursor.fetchone()
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(UniqueExpressionCharModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferRemoveUniqueConstraint(
+            model_name="uniqueexpressioncharmodel",
+            name=constraint_name,
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+        # Proceed to remove the constraint.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+        # Prove the index is not there any longer.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_VALID_INDEX_EXISTS_QUERY,
+                {"index_name": constraint_name},
+            )
+            assert not cursor.fetchone()
+
+        # Assert on the sequence of expected SQL queries:
+        #
+        # 1. Check the original lock_timeout value to be able to restore it
+        # later.
+        assert queries[0]["sql"] == "SHOW lock_timeout;"
+        # 2. Remove the timeout.
+        assert queries[1]["sql"] == "SET lock_timeout = '0';"
+
+        # 3. Drop the index concurrently.
+        assert (
+            queries[2]["sql"]
+            == f'DROP INDEX CONCURRENTLY IF EXISTS "{constraint_name}"'
+        )
+        # 4. Set the timeout back to what it was originally.
+        assert queries[3]["sql"] == "SET lock_timeout = '1s';"
+
+        assert len(queries) == 4
+
+        # Before reversing, set the lock_timeout value so we can observe it
+        # being re-set.
+        with connection.cursor() as cursor:
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        # Reverse the migration to recreate the constraint.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+
+        # These will be the same as when creating a constraint safely. I.e.,
+        # adding the index concurrently without timeouts, and using this index
+        # to create the constraint.
+        #
+
+        # 1. Check the original lock_timeout value to be able to restore it
+        # later.
+        assert reverse_queries[0]["sql"] == "SHOW lock_timeout;"
+        # 2. Remove the timeout.
+        assert reverse_queries[1]["sql"] == "SET lock_timeout = '0';"
+        # 3. Verify if the index is invalid.
+        assert reverse_queries[2]["sql"] == dedent(
+            f"""
+            SELECT relname
+            FROM pg_class, pg_index
+            WHERE (
+                pg_index.indisvalid = false
+                AND pg_index.indexrelid = pg_class.oid
+                AND relname = '{constraint_name}'
+            );
+            """
+        )
+        # 4. Finally create the index concurrently.
+        assert (
+            reverse_queries[3]["sql"]
+            == f'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "{constraint_name}" ON "example_app_uniqueexpressioncharmodel" ((LOWER("char_field")))'
         )
         # 5. Set the timeout back to what it was originally.
         assert reverse_queries[4]["sql"] == "SET lock_timeout = '1s';"

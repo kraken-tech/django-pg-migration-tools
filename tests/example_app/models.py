@@ -1,5 +1,6 @@
 import django
 from django.db import models
+from django.db.models import functions
 
 
 def get_check_constraint(condition: models.Q, name: str) -> models.CheckConstraint:
@@ -40,16 +41,35 @@ class CharModel(models.Model):
         )
 
 
-class AnotherCharModel(models.Model):
+class UniqueConditionCharModel(models.Model):
     char_field = models.CharField(default="char")
 
     class Meta:
-        indexes = (models.Index(fields=["char_field"], name="another_char_field_idx"),)
+        indexes = (
+            models.Index(fields=["char_field"], name="unique_condition_char_field_idx"),
+        )
         constraints = (
             models.UniqueConstraint(
                 fields=["char_field"],
                 name="unique_char_field_with_condition",
                 condition=models.Q(char_field__in=["c", "something"]),
+            ),
+        )
+
+
+class UniqueExpressionCharModel(models.Model):
+    char_field = models.CharField(default="char")
+
+    class Meta:
+        indexes = (
+            models.Index(
+                fields=["char_field"], name="unique_expression_char_field_idx"
+            ),
+        )
+        constraints = (
+            models.UniqueConstraint(
+                functions.Lower("char_field"),
+                name="unique_char_field_with_expression",
             ),
         )
 
