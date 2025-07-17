@@ -600,7 +600,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
                 f"{constraint.name} because a constraint of the same "
                 f"name already exists. If you want to skip this operation "
                 f"when the constraint already exists, run the operation "
-                f"with the flag `skip_if_exists=True`."
+                f"with the flag `raise_if_exists=False`."
             )
         # We can't re-create a constraint that already exists because the
         # ALTER TABLE ... ADD CONSTRAINT is not idempotent.
