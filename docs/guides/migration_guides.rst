@@ -830,6 +830,8 @@ fixes those problems by:
 - Having a custom backward operation that will add the foreign key back
   without blocking any reads/writes. This is achieved through the same
   strategy of :ref:`SaferAddFieldForeignKey <safer_add_field_foreign_key>`.
+  Note that if the original column was non-nullable, the reversal will create
+  the field as nullable to avoid outages.
 
 .. _guide_how_to_use_safer_remove_field_foreign_key:
 

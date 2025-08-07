@@ -31,6 +31,10 @@ class ModelWithForeignKey(models.Model):
     fk = models.ForeignKey(IntModel, null=True, on_delete=models.CASCADE)
 
 
+class ModelWithNotNullForeignKey(models.Model):
+    fk = models.ForeignKey(IntModel, null=False, on_delete=models.CASCADE)
+
+
 class CharModel(models.Model):
     char_field = models.CharField(default="char")
 
