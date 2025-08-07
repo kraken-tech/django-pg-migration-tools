@@ -8,6 +8,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+_No notable unreleased changes_
+
+## [0.1.22] - 2025-08-07
+
 ### Fixed
 
 - Fixed a bug where using `SaferRemoveFieldForeignKey` on a field that had
@@ -224,7 +228,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 - `SaferAddIndexConcurrently` migration operation to create new Postgres
   indexes in a safer, idempotent way.
 
-[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.21...HEAD
+[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.22...HEAD
+[0.1.22]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/kraken-tech/django-pg-migration-tools/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/kraken-tech/django-pg-migration-tools/compare/v0.1.18...v0.1.19
