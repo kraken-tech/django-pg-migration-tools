@@ -8,7 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
-_No notable unreleased changes_
+### Fixed
+
+- Fixed a bug where using `SaferRemoveFieldForeignKey` on a field that had
+  null=False was raising an error. This shouldn't be the case as the
+  nullability of the field is not important when removing the FK field.
 
 ## [0.1.21] - 2025-07-07
 

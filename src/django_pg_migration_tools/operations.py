@@ -1156,8 +1156,9 @@ class ForeignKeyManager(base_operations.Operation):
         column_name: str,
         field: models.ForeignKey[models.Model],
         unique: bool,
+        skip_null_check: bool = False,
     ) -> None:
-        if not field.null:
+        if not field.null and not skip_null_check:
             # Validate at initialisation, rather than wasting time later.
             raise ValueError("Can't safely create a FK field with null=False")
 
@@ -1486,6 +1487,7 @@ class SaferRemoveFieldForeignKey(operation_fields.RemoveField):
             column_name=self.name,
             field=field,
             unique=False,
+            skip_null_check=True,
         ).drop_fk_field()
 
     def database_backwards(
@@ -1508,6 +1510,7 @@ class SaferRemoveFieldForeignKey(operation_fields.RemoveField):
             column_name=self.name,
             field=field,
             unique=False,
+            skip_null_check=True,
         ).add_fk_field()
 
     def describe(self) -> str:
