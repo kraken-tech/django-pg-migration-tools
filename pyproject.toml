@@ -21,7 +21,7 @@ where = ["src"]
 
 [project]
 name = "django_pg_migration_tools"
-version = "0.1.21"
+version = "0.1.22"
 description = "Tools for making Django migrations safer and more scalable."
 license.file = "LICENSE"
 readme = "README.md"
@@ -175,7 +175,7 @@ exclude_also = [
 
 [tool.bumpversion]
 # Do not manually edit the version, use `make version_{type}` instead.
-current_version = "0.1.21"
+current_version = "0.1.22"
 
 # Relabel the Unreleased section of the changelog and add a new unreleased section as a reminder to
 # add to it.
