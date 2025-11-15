@@ -60,9 +60,6 @@ class TestMultiSchemaConstraints:
             cursor.execute("DROP SCHEMA IF EXISTS tenant1 CASCADE")
             cursor.execute("DROP SCHEMA IF EXISTS tenant2 CASCADE")
 
-    @pytest.mark.xfail(
-        reason="Constraint queries not yet schema-aware", raises=AssertionError
-    )
     def test_check_existing_constraint_only_sees_current_schema(self):
         """
         Test that CHECK_EXISTING_CONSTRAINT only detects constraints in the
@@ -99,9 +96,6 @@ class TestMultiSchemaConstraints:
                 "Constraint should NOT be visible in tenant2"
             )
 
-    @pytest.mark.xfail(
-        reason="Constraint queries not yet schema-aware", raises=AssertionError
-    )
     def test_check_constraint_is_valid_only_sees_current_schema(self):
         """
         Test that CHECK_CONSTRAINT_IS_VALID only detects valid constraints
@@ -140,9 +134,6 @@ class TestMultiSchemaConstraints:
                 "Valid constraint should NOT be visible in tenant2"
             )
 
-    @pytest.mark.xfail(
-        reason="Constraint queries not yet schema-aware", raises=AssertionError
-    )
     def test_check_constraint_is_not_valid_only_sees_current_schema(self):
         """
         Test that CHECK_CONSTRAINT_IS_NOT_VALID only detects NOT VALID
@@ -190,10 +181,6 @@ class TestMultiSchemaConstraints:
                 "NOT VALID constraint should NOT be visible in tenant2"
             )
 
-    @pytest.mark.xfail(
-        reason="Constraint queries not yet schema-aware",
-        raises=operations.ConstraintAlreadyExists,
-    )
     def test_unique_constraint_creation_in_second_schema(self):
         """
         Test that SaferAddUniqueConstraint can create a constraint in a second
@@ -260,7 +247,6 @@ class TestMultiSchemaConstraints:
             )
 
         # Verify both schemas have the constraint using a schema-aware query
-        # (not the potentially buggy CHECK_EXISTING_CONSTRAINT)
         with connection.cursor() as cursor:
             for schema in ["tenant1", "tenant2"]:
                 cursor.execute(f"SET search_path TO {schema}")
@@ -281,9 +267,6 @@ class TestMultiSchemaConstraints:
             # Reset to public schema
             cursor.execute("SET search_path TO public")
 
-    @pytest.mark.xfail(
-        reason="Constraint queries not yet schema-aware", raises=AssertionError
-    )
     def test_check_constraint_creation_in_second_schema(self):
         """
         Test that SaferAddCheckConstraint can create a constraint in a second

@@ -54,25 +54,31 @@ class IndexQueries:
 
 class ConstraintQueries:
     CHECK_EXISTING_CONSTRAINT = dedent("""
-        SELECT conname
-        FROM pg_catalog.pg_constraint
-        WHERE conname = {constraint_name};
+        SELECT con.conname
+        FROM pg_catalog.pg_constraint con
+        INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+        WHERE con.conname = {constraint_name}
+            AND nsp.nspname = current_schema();
     """)
 
     CHECK_CONSTRAINT_IS_VALID = dedent("""
         SELECT 1
-        FROM pg_catalog.pg_constraint
+        FROM pg_catalog.pg_constraint con
+        INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
         WHERE
-            conname = {constraint_name}
-            AND convalidated IS TRUE;
+            con.conname = {constraint_name}
+            AND con.convalidated IS TRUE
+            AND nsp.nspname = current_schema();
     """)
 
     CHECK_CONSTRAINT_IS_NOT_VALID = dedent("""
         SELECT 1
-        FROM pg_catalog.pg_constraint
+        FROM pg_catalog.pg_constraint con
+        INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
         WHERE
-            conname = {constraint_name}
-            AND convalidated IS FALSE;
+            con.conname = {constraint_name}
+            AND con.convalidated IS FALSE
+            AND nsp.nspname = current_schema();
     """)
 
     ALTER_TABLE_CONSTRAINT_NOT_NULL_NOT_VALID = dedent("""
