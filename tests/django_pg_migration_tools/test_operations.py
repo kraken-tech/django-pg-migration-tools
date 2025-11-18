@@ -28,6 +28,7 @@ from tests.example_app.models import (
     NullIntFieldModel,
     UniqueConditionCharModel,
     UniqueExpressionCharModel,
+    UUIDFieldModel,
     get_check_constraint,
 )
 
@@ -3787,6 +3788,77 @@ class TestSaferAddFieldForeignKey:
             WHERE
                 attrelid = 'example_app_intmodel'::regclass
                 AND attname = 'other_int_model_field_id';
+        """)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_operation_when_has_explicit_non_pk_to_field(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(UUIDFieldModel))
+        new_state = project_state.clone()
+
+        # Relate the IntModel -> UUIDFieldModel by UUIDFieldModel.uuid_field relationship.
+        operation = operations.SaferAddFieldForeignKey(
+            model_name="intmodel",
+            name="uuid_model_uuid_field",
+            field=models.ForeignKey(
+                "example_app.UUIDFieldModel",
+                null=True,
+                on_delete=models.CASCADE,
+                db_index=False,
+                to_field="uuid_field",  # Do not default to the Primary Key field.
+            ),
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+        assert len(queries) == 4
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_intmodel'::regclass
+                AND attname = 'uuid_model_uuid_field_id';
+        """)
+        assert queries[1]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            ADD COLUMN IF NOT EXISTS "uuid_model_uuid_field_id"
+            uuid NULL;
+        """)
+        assert queries[2]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            ADD CONSTRAINT "example_app_intmodel_uuid_model_uuid_field_id_fk" FOREIGN KEY ("uuid_model_uuid_field_id")
+            REFERENCES "example_app_uuidfieldmodel" ("uuid_field")
+            DEFERRABLE INITIALLY DEFERRED
+            NOT VALID;
+        """)
+        assert queries[3]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            VALIDATE CONSTRAINT "example_app_intmodel_uuid_model_uuid_field_id_fk";
+        """)
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+
+        assert len(reverse_queries) == 2
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_intmodel'::regclass
+                AND attname = 'uuid_model_uuid_field_id';
+        """)
+        assert reverse_queries[1]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            DROP COLUMN "uuid_model_uuid_field_id";
         """)
 
 

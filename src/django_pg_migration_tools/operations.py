@@ -1306,8 +1306,26 @@ class ForeignKeyManager(base_operations.Operation):
         assert isinstance(pk_field, models.Field)
         return pk_field
 
+    def _get_remote_to_field(self) -> models.Field[Any, Any]:
+        to_field = self.field.to_fields[0]
+        remote_model = self._get_remote_model()
+
+        remote_field = next(
+            field for field in remote_model._meta.get_fields() if field.name == to_field
+        )
+        assert isinstance(remote_field, models.Field)
+        return remote_field
+
+    def _get_target_field(self) -> models.Field[Any, Any]:
+        # If to_field is specified, we don't want to default to using the pk.
+        if self.field.to_fields and self.field.to_fields[0]:
+            target_field = self._get_remote_to_field()
+        else:
+            target_field = self._get_remote_pk_field()
+        return target_field
+
     def _get_column_type(self) -> str:
-        remote_field = self._get_remote_pk_field()
+        remote_field = self._get_target_field()
         column_type: str | None = remote_field.db_type(self.schema_editor.connection)
         assert column_type is not None
         return column_type
@@ -1384,8 +1402,8 @@ class ForeignKeyManager(base_operations.Operation):
 
     def _alter_table_add_not_valid_fk(self) -> None:
         remote_model = self._get_remote_model()
-        remote_pk_field = self._get_remote_pk_field()
-        referred_column_name = remote_pk_field.db_column or remote_pk_field.name
+        remote_target_field = self._get_target_field()
+        referred_column_name = remote_target_field.db_column or remote_target_field.name
         self.schema_editor.execute(
             psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK)
             .format(
