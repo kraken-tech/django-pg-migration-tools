@@ -95,6 +95,18 @@ class CharIDModel(models.Model):
     id = models.CharField(max_length=42, primary_key=True)
 
 
+class UUIDFieldModel(models.Model):
+    uuid_field = models.UUIDField()
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(
+                fields=["uuid_field"],
+                name="unique_uuid_field",
+            ),
+        )
+
+
 class ModelWithCheckConstraint(models.Model):
     class Meta:
         constraints = (

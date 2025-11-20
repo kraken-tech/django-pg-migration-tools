@@ -10,6 +10,13 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 _No notable unreleased changes_
 
+## [0.1.23] - 2025-11-18
+
+### Fixed
+
+- Fixed a bug where `SaferAddFieldForeignKey` ignored the `ForeignKey` `to_field`
+  parameter, resulting in an incorrect column type and incorrect primary key reference.
+
 ## [0.1.22] - 2025-08-07
 
 ### Fixed
@@ -228,7 +235,8 @@ _No notable unreleased changes_
 - `SaferAddIndexConcurrently` migration operation to create new Postgres
   indexes in a safer, idempotent way.
 
-[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.22...HEAD
+[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.23...HEAD
+[0.1.23]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/kraken-tech/django-pg-migration-tools/compare/v0.1.19...v0.1.20
