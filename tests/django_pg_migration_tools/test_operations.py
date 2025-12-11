@@ -2589,6 +2589,160 @@ class TestSaferRemoveFieldForeignKey:
         """)
 
     @pytest.mark.django_db(transaction=True)
+    def test_operation_when_already_removed_from_state(self):
+        with connection.cursor() as cursor:
+            # Set the lock_timeout to check it has been returned to
+            # its original value once the fk index creation is completed by
+            # the reverse operation.
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(ModelWithForeignKey))
+        new_state = project_state.clone()
+        operation = operations.SaferRemoveFieldForeignKey(
+            model_name="modelwithforeignkey",
+            name="fk",
+        )
+
+        assert operation.describe() == (
+            "Remove field fk from modelwithforeignkey. Note: Using "
+            "django_pg_migration_tools SaferRemoveFieldForeignKey operation."
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+
+        # Do database only operation - has already been removed from state
+        newer_state = new_state.clone()
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=new_state, to_state=newer_state
+                )
+
+        assert len(queries) == 2
+
+        assert queries[0]["sql"] == dedent(
+            """
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_modelwithforeignkey'::regclass
+                AND attname = 'fk_id';
+        """
+        )
+        assert queries[1]["sql"] == dedent(
+            """
+            ALTER TABLE "example_app_modelwithforeignkey"
+            DROP COLUMN "fk_id";
+        """
+        )
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+
+        assert len(reverse_queries) == 9
+
+        assert reverse_queries[0]["sql"] == dedent(
+            """
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_modelwithforeignkey'::regclass
+                AND attname = 'fk_id';
+        """
+        )
+        assert reverse_queries[1]["sql"] == dedent(
+            """
+            ALTER TABLE "example_app_modelwithforeignkey"
+            ADD COLUMN IF NOT EXISTS "fk_id"
+            integer NULL;
+        """
+        )
+        assert reverse_queries[2]["sql"] == "SHOW lock_timeout;"
+        assert reverse_queries[3]["sql"] == "SET lock_timeout = '0';"
+        assert reverse_queries[4]["sql"] == dedent(
+            """
+            SELECT relname
+            FROM pg_class, pg_index
+            WHERE (
+                pg_index.indisvalid = false
+                AND pg_index.indexrelid = pg_class.oid
+                AND relname = 'modelwithforeignkey_fk_id_idx'
+            );
+            """
+        )
+        assert (
+            reverse_queries[5]["sql"]
+            == 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "modelwithforeignkey_fk_id_idx" ON "example_app_modelwithforeignkey" ("fk_id");'
+        )
+        assert reverse_queries[6]["sql"] == "SET lock_timeout = '1s';"
+        assert reverse_queries[7]["sql"] == dedent(
+            """
+            ALTER TABLE "example_app_modelwithforeignkey"
+            ADD CONSTRAINT "example_app_modelwithforeignkey_fk_id_fk" FOREIGN KEY ("fk_id")
+            REFERENCES "example_app_intmodel" ("id")
+            DEFERRABLE INITIALLY DEFERRED
+            NOT VALID;
+        """
+        )
+        assert reverse_queries[8]["sql"] == dedent(
+            """
+            ALTER TABLE "example_app_modelwithforeignkey"
+            VALIDATE CONSTRAINT "example_app_modelwithforeignkey_fk_id_fk";
+        """
+        )
+
+        # Reversing again does nothing apart from checking that the FK is
+        # already there and the index/constraint are all good to go.
+        # This proves the OP is idempotent.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+        assert len(second_reverse_queries) == 4
+        assert second_reverse_queries[0]["sql"] == dedent(
+            """
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_modelwithforeignkey'::regclass
+                AND attname = 'fk_id';
+        """
+        )
+        assert second_reverse_queries[1]["sql"] == dedent(
+            """
+            SELECT 1
+            FROM pg_class, pg_index
+            WHERE (
+                pg_index.indisvalid = true
+                AND pg_index.indexrelid = pg_class.oid
+                AND relname = 'modelwithforeignkey_fk_id_idx'
+            );
+        """
+        )
+        assert second_reverse_queries[2]["sql"] == dedent(
+            """
+            SELECT conname
+            FROM pg_catalog.pg_constraint
+            WHERE conname = 'example_app_modelwithforeignkey_fk_id_fk';
+        """
+        )
+        assert second_reverse_queries[3]["sql"] == dedent(
+            """
+            SELECT 1
+            FROM pg_catalog.pg_constraint
+            WHERE
+                conname = 'example_app_modelwithforeignkey_fk_id_fk'
+                AND convalidated IS TRUE;
+        """
+        )
+
+    @pytest.mark.django_db(transaction=True)
     def test_when_column_not_null(self):
         with connection.cursor() as cursor:
             # Set the lock_timeout to check it has been returned to
