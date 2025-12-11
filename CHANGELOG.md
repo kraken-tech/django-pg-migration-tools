@@ -8,7 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
-_No notable unreleased changes_
+### Fixed
+
+- Fixed a bug where `SaferRemoveFieldForeignKey` relied on the Foreign Key also
+  existing in Django state, even when being performed as a database only operation.
+  The name and model are already provided as part of the operation.
 
 ## [0.1.23] - 2025-11-18
 
