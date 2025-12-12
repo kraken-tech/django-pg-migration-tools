@@ -5,6 +5,7 @@ from textwrap import dedent
 from typing import Any, cast, overload
 
 from django.contrib.postgres import operations as psql_operations
+from django.core import exceptions
 from django.db import migrations, models
 from django.db.backends import utils as django_backends_utils
 from django.db.backends.base import schema as base_schema
@@ -1154,11 +1155,11 @@ class ForeignKeyManager(base_operations.Operation):
         model: type[models.Model],
         model_name: str,
         column_name: str,
-        field: models.ForeignKey[models.Model],
+        field: models.ForeignKey[models.Model] | None,
         unique: bool,
         skip_null_check: bool = False,
     ) -> None:
-        if not field.null and not skip_null_check:
+        if field is not None and (not field.null and not skip_null_check):
             # Validate at initialisation, rather than wasting time later.
             raise ValueError("Can't safely create a FK field with null=False")
 
@@ -1242,6 +1243,7 @@ class ForeignKeyManager(base_operations.Operation):
             # as they would add extra introspection queries unnecessarily.
             self._maybe_create_unique_constraint()
 
+        assert self.field is not None
         assert hasattr(self.field, "db_index")
         if (
             self.field.db_index
@@ -1289,6 +1291,7 @@ class ForeignKeyManager(base_operations.Operation):
         )
 
     def _get_remote_model(self) -> models.Model:
+        assert self.field is not None
         if isinstance(self.field.remote_field.model, str):
             app_name, model_name = self.field.remote_field.model.split(".")  # type: ignore[unreachable]
 
@@ -1307,6 +1310,7 @@ class ForeignKeyManager(base_operations.Operation):
         return pk_field
 
     def _get_remote_to_field(self) -> models.Field[Any, Any]:
+        assert self.field is not None
         to_field = self.field.to_fields[0]
         remote_model = self._get_remote_model()
 
@@ -1318,6 +1322,7 @@ class ForeignKeyManager(base_operations.Operation):
 
     def _get_target_field(self) -> models.Field[Any, Any]:
         # If to_field is specified, we don't want to default to using the pk.
+        assert self.field is not None
         if self.field.to_fields and self.field.to_fields[0]:
             target_field = self._get_remote_to_field()
         else:
@@ -1356,6 +1361,7 @@ class ForeignKeyManager(base_operations.Operation):
             # be used as indexes by Postgres.
             return
 
+        assert self.field is not None
         assert hasattr(self.field, "db_index")
         if self.field.db_index:
             SafeIndexOperationManager().safer_create_index(
@@ -1492,9 +1498,12 @@ class SaferRemoveFieldForeignKey(operation_fields.RemoveField):
         from_state: migrations.state.ProjectState,
         to_state: migrations.state.ProjectState,
     ) -> None:
-        field = from_state.apps.get_model(app_label, self.model_name)._meta.get_field(
-            self.name
-        )
+        try:
+            field = from_state.apps.get_model(
+                app_label, self.model_name
+            )._meta.get_field(self.name)
+        except exceptions.FieldDoesNotExist:
+            field = None
         ForeignKeyManager(
             app_label,
             schema_editor,
