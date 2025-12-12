@@ -8,6 +8,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+_No notable unreleased changes_
+
+## [0.1.24] - 2025-12-12
+
 ### Fixed
 
 - Fixed a bug where `SaferRemoveFieldForeignKey` relied on the Foreign Key also
@@ -239,7 +243,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 - `SaferAddIndexConcurrently` migration operation to create new Postgres
   indexes in a safer, idempotent way.
 
-[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.23...HEAD
+[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.24...HEAD
+[0.1.24]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.20...v0.1.21
