@@ -46,20 +46,20 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
     ],
 )
 @nox.parametrize(
-    "package_constraint",
+    "django_version",
     [
-        nox.param("django>=4.2,<4.3", id="django=4.2.X"),
-        nox.param("django>=5.0,<5.1", id="django=5.0.X"),
+        nox.param("4.2", id="django~=4.2"),
+        nox.param("5.0", id="django~=5.0"),
     ],
 )
-def tests(session: nox.Session, package_constraint: str, dependency_file: str) -> None:
+def tests(session: nox.Session, django_version: str, dependency_file: str) -> None:
     """
     Run the test suite.
     """
     with temp_constraints_file() as constraints_file, temp_lock_file() as lock_file:
         # Create a constraints file with the parameterized package versions.
         # It's easy to add more constraints here if needed.
-        constraints_file.write(f"{package_constraint}\n")
+        constraints_file.write(f"django~={django_version}\n")
         constraints_file.flush()
 
         # Compile a new development lock file with the additional package
