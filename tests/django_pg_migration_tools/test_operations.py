@@ -665,9 +665,11 @@ class TestSaferAddUniqueConstraint:
         #
         # 1. Check if the constraint already exists.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_int_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_int_field'
+                AND nsp.nspname = current_schema();
             """)
         # 2. Check the original lock_timeout value to be able to restore it
         # later.
@@ -712,9 +714,11 @@ class TestSaferAddUniqueConstraint:
 
         # 1. Check that the constraint is still there.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_int_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_int_field'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. perform the ALTER TABLE.
@@ -745,9 +749,11 @@ class TestSaferAddUniqueConstraint:
         assert len(second_reverse_queries) == 1
         # Check that the constraint isn't there.
         assert second_reverse_queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_int_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_int_field'
+                AND nsp.nspname = current_schema();
             """)
 
     # Disable the overall test transaction because a unique concurrent index
@@ -815,9 +821,11 @@ class TestSaferAddUniqueConstraint:
         #
         # 1. Check if the constraint already exists.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_int_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_int_field'
+                AND nsp.nspname = current_schema();
             """)
         # 2. Check the original lock_timeout value to be able to restore it
         # later.
@@ -858,9 +866,11 @@ class TestSaferAddUniqueConstraint:
 
         # 1. Check that the constraint is still there.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_int_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_int_field'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. perform the ALTER TABLE.
@@ -1046,9 +1056,11 @@ class TestSaferAddUniqueConstraint:
         #
         # 1. Check whether the constraint already exists.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_int_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_int_field'
+                AND nsp.nspname = current_schema();
             """)
         # 2. Check the original lock_timeout value to be able to restore it
         # later.
@@ -1089,9 +1101,11 @@ class TestSaferAddUniqueConstraint:
 
         # 1. Check that the constraint is still there.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_int_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_int_field'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. perform the ALTER TABLE.
@@ -1171,9 +1185,11 @@ class TestSaferAddUniqueConstraint:
 
         # Only fired one query to check if the index already exists.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_int_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_int_field'
+                AND nsp.nspname = current_schema();
             """)
 
         # Drop the constraint. As we aren't in a test with transaction, we have
@@ -1523,9 +1539,11 @@ class TestSaferRemoveUniqueConstraint:
         #
         # 1. Check if the constraint exists.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_char_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_char_field'
+                AND nsp.nspname = current_schema();
             """)
         # 2. Remove the constraint.
         assert queries[1]["sql"] == (
@@ -1552,9 +1570,11 @@ class TestSaferRemoveUniqueConstraint:
         #
         # 1. Check if the constraint already exists.
         assert reverse_queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_char_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_char_field'
+                AND nsp.nspname = current_schema();
             """)
         # 2. Check the original lock_timeout value to be able to restore it
         # later.
@@ -1888,9 +1908,11 @@ class TestSaferRemoveUniqueConstraint:
 
         # Checks if the constraint already exists.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'unique_char_field';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_char_field'
+                AND nsp.nspname = current_schema();
             """)
         assert len(queries) == 1
 
@@ -2011,9 +2033,11 @@ class TestSaferAlterFieldSetNotNull:
                 AND attnotnull IS TRUE;
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_ap_fk_id_9fd70957e5';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_ap_fk_id_9fd70957e5'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[2]["sql"] == dedent("""
             ALTER TABLE "example_app_nullfkfieldmodel"
@@ -2106,9 +2130,11 @@ class TestSaferAlterFieldSetNotNull:
                 AND attnotnull IS TRUE;
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_ap_int_field_59f69830a8';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_ap_int_field_59f69830a8'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[2]["sql"] == dedent("""
             ALTER TABLE "example_app_nullintfieldmodel"
@@ -2235,9 +2261,11 @@ class TestSaferAlterFieldSetNotNull:
                 AND attnotnull IS TRUE;
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_ap_int_field_147755c69b';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_ap_int_field_147755c69b'
+                AND nsp.nspname = current_schema();
         """)
 
     @pytest.mark.django_db(transaction=True)
@@ -2273,16 +2301,20 @@ class TestSaferAlterFieldSetNotNull:
                 AND attnotnull IS TRUE;
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_ap_int_field_59f69830a8';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_ap_int_field_59f69830a8'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[2]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_ap_int_field_59f69830a8'
-                AND convalidated IS TRUE;
+                con.conname = 'example_ap_int_field_59f69830a8'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             ALTER TABLE "example_app_nullintfieldmodel"
@@ -2327,16 +2359,20 @@ class TestSaferAlterFieldSetNotNull:
                 AND attnotnull IS TRUE;
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_ap_int_field_59f69830a8';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_ap_int_field_59f69830a8'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[2]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_ap_int_field_59f69830a8'
-                AND convalidated IS TRUE;
+                con.conname = 'example_ap_int_field_59f69830a8'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             ALTER TABLE "example_app_nullintfieldmodel"
@@ -2390,16 +2426,20 @@ class TestSaferAlterFieldSetNotNull:
                 AND attnotnull IS TRUE;
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_ap_int_field_59f69830a8';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_ap_int_field_59f69830a8'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[2]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_ap_int_field_59f69830a8'
-                AND convalidated IS TRUE;
+                con.conname = 'example_ap_int_field_59f69830a8'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             ALTER TABLE "example_app_nullintfieldmodel"
@@ -2576,16 +2616,20 @@ class TestSaferRemoveFieldForeignKey:
             );
         """)
         assert second_reverse_queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_modelwithforeignkey_fk_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_modelwithforeignkey_fk_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert second_reverse_queries[3]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_app_modelwithforeignkey_fk_id_fk'
-                AND convalidated IS TRUE;
+                con.conname = 'example_app_modelwithforeignkey_fk_id_fk'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
 
     @pytest.mark.django_db(transaction=True)
@@ -2859,16 +2903,20 @@ class TestSaferRemoveFieldForeignKey:
             );
         """)
         assert second_reverse_queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_modelwithnotnullforeignkey_fk_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_modelwithnotnullforeignkey_fk_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert second_reverse_queries[3]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_app_modelwithnotnullforeignkey_fk_id_fk'
-                AND convalidated IS TRUE;
+                con.conname = 'example_app_modelwithnotnullforeignkey_fk_id_fk'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
 
     @pytest.mark.django_db(transaction=True)
@@ -3379,9 +3427,11 @@ class TestSaferAddFieldForeignKey:
             );
             """)
         assert queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_intmodel_char_model_field_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             ALTER TABLE "example_app_intmodel"
@@ -3470,16 +3520,20 @@ class TestSaferAddFieldForeignKey:
             );
             """)
         assert queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_intmodel_char_model_field_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_app_intmodel_char_model_field_id_fk'
-                AND convalidated IS TRUE;
+                con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
         assert queries[4]["sql"] == dedent("""
             ALTER TABLE "example_app_intmodel"
@@ -3560,16 +3614,20 @@ class TestSaferAddFieldForeignKey:
             );
             """)
         assert queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_intmodel_char_model_field_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_app_intmodel_char_model_field_id_fk'
-                AND convalidated IS TRUE;
+                con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
 
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
@@ -4149,9 +4207,11 @@ class TestSaferAddCheckConstraint:
 
         # 1. Check if the constraint is there.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'positive_int';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'positive_int'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. Add a not valid constraint
@@ -4188,17 +4248,21 @@ class TestSaferAddCheckConstraint:
 
         # 1. Check if the constraint is there.
         assert second_run_queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'positive_int';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'positive_int'
+                AND nsp.nspname = current_schema();
             """)
         # 2. Check if it is invalid.
         assert second_run_queries[1]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'positive_int'
-                AND convalidated IS FALSE;
+                con.conname = 'positive_int'
+                AND con.convalidated IS FALSE
+                AND nsp.nspname = current_schema();
             """)
 
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
@@ -4209,9 +4273,11 @@ class TestSaferAddCheckConstraint:
 
         # 1. Check that the constraint is still there.
         assert reverse_queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'positive_int';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'positive_int'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. perform the ALTER TABLE.
@@ -4242,9 +4308,11 @@ class TestSaferAddCheckConstraint:
         assert len(second_reverse_queries) == 1
         # Check that the constraint isn't there.
         assert second_reverse_queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'positive_int';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'positive_int'
+                AND nsp.nspname = current_schema();
             """)
 
     @pytest.mark.django_db(transaction=True)
@@ -4279,18 +4347,22 @@ class TestSaferAddCheckConstraint:
 
         # 1. Check if the constraint is there.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'positive_int';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'positive_int'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. Check if is not valid
         assert queries[1]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'positive_int'
-                AND convalidated IS FALSE;
+                con.conname = 'positive_int'
+                AND con.convalidated IS FALSE
+                AND nsp.nspname = current_schema();
             """)
 
         # 3. Validate it
@@ -4308,9 +4380,11 @@ class TestSaferAddCheckConstraint:
 
         # 1. Check that the constraint is still there.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'positive_int';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'positive_int'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. perform the ALTER TABLE.
@@ -4500,9 +4574,11 @@ class TestSaferSaferAddFieldOneToOne:
             integer NULL;
         """)
         assert queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'intmodel_char_model_field_id_uniq';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'intmodel_char_model_field_id_uniq'
+                AND nsp.nspname = current_schema();
             """)
         assert queries[3]["sql"] == "SHOW lock_timeout;"
         assert queries[4]["sql"] == "SET lock_timeout = '0';"
@@ -4659,9 +4735,11 @@ class TestSaferSaferAddFieldOneToOne:
                 AND attname = 'char_model_field_id';
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'intmodel_char_model_field_id_uniq';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'intmodel_char_model_field_id_uniq'
+                AND nsp.nspname = current_schema();
             """)
         assert queries[2]["sql"] == "SHOW lock_timeout;"
         assert queries[3]["sql"] == "SET lock_timeout = '0';"
@@ -4684,9 +4762,11 @@ class TestSaferSaferAddFieldOneToOne:
             == 'ALTER TABLE "example_app_intmodel" ADD CONSTRAINT "intmodel_char_model_field_id_uniq" UNIQUE USING INDEX "intmodel_char_model_field_id_uniq"'
         )
         assert queries[8]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_intmodel_char_model_field_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[9]["sql"] == dedent("""
             ALTER TABLE "example_app_intmodel"
@@ -4763,14 +4843,18 @@ class TestSaferSaferAddFieldOneToOne:
                 AND attname = 'char_model_field_id';
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'intmodel_char_model_field_id_uniq';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'intmodel_char_model_field_id_uniq'
+                AND nsp.nspname = current_schema();
             """)
         assert queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_intmodel_char_model_field_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             ALTER TABLE "example_app_intmodel"
@@ -4855,21 +4939,27 @@ class TestSaferSaferAddFieldOneToOne:
                 AND attname = 'char_model_field_id';
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'intmodel_char_model_field_id_uniq';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'intmodel_char_model_field_id_uniq'
+                AND nsp.nspname = current_schema();
             """)
         assert queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_intmodel_char_model_field_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_app_intmodel_char_model_field_id_fk'
-                AND convalidated IS TRUE;
+                con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
         assert queries[4]["sql"] == dedent("""
             ALTER TABLE "example_app_intmodel"
@@ -4946,21 +5036,27 @@ class TestSaferSaferAddFieldOneToOne:
                 AND attname = 'char_model_field_id';
         """)
         assert queries[1]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'intmodel_char_model_field_id_uniq';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'intmodel_char_model_field_id_uniq'
+                AND nsp.nspname = current_schema();
             """)
         assert queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_intmodel_char_model_field_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND nsp.nspname = current_schema();
         """)
         assert queries[3]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_app_intmodel_char_model_field_id_fk'
-                AND convalidated IS TRUE;
+                con.conname = 'example_app_intmodel_char_model_field_id_fk'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """)
 
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
@@ -5017,9 +5113,11 @@ class TestSaferSaferAddFieldOneToOne:
             varchar(42) NULL;
         """)
         assert queries[2]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'intmodel_char_id_model_field_id_uniq';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'intmodel_char_id_model_field_id_uniq'
+                AND nsp.nspname = current_schema();
             """)
         assert queries[3]["sql"] == "SHOW lock_timeout;"
         assert queries[4]["sql"] == "SET lock_timeout = '0';"
@@ -5198,9 +5296,11 @@ class TestSaferRemoveCheckConstraint:
 
         # 1. Check that the constraint is still there.
         assert queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'id_must_be_42';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'id_must_be_42'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. perform the ALTER TABLE.
@@ -5230,9 +5330,11 @@ class TestSaferRemoveCheckConstraint:
 
         # 1. Check if the constraint is there.
         assert second_run_queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'id_must_be_42';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'id_must_be_42'
+                AND nsp.nspname = current_schema();
             """)
 
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
@@ -5245,9 +5347,11 @@ class TestSaferRemoveCheckConstraint:
 
         # 1. Check if the constraint is there.
         assert reverse_queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'id_must_be_42';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'id_must_be_42'
+                AND nsp.nspname = current_schema();
             """)
 
         # 2. Add a not valid constraint
@@ -5281,16 +5385,20 @@ class TestSaferRemoveCheckConstraint:
 
         assert len(second_reverse_queries) == 2
         assert second_reverse_queries[0]["sql"] == dedent("""
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'id_must_be_42';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'id_must_be_42'
+                AND nsp.nspname = current_schema();
             """)
         assert second_reverse_queries[1]["sql"] == dedent("""
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'id_must_be_42'
-                AND convalidated IS FALSE;
+                con.conname = 'id_must_be_42'
+                AND con.convalidated IS FALSE
+                AND nsp.nspname = current_schema();
             """)
 
     @pytest.mark.django_db(transaction=True)
