@@ -22,3 +22,5 @@ INSTALLED_APPS = [
     "django_pg_migration_tools",
 ]
 USE_TZ = True
+
+DEFAULT_AUTO_FIELD: str = "django.db.models.AutoField"
