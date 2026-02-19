@@ -50,6 +50,8 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
         nox.param("3.10", id="python=3.10"),
         nox.param("3.11", id="python=3.11"),
         nox.param("3.12", id="python=3.12"),
+        nox.param("3.13", id="python=3.13"),
+        nox.param("3.14", id="python=3.14"),
     ],
 )
 def tests(session: nox.Session, package_constraint: str, dependency_file: str) -> None:
