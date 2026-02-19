@@ -34,6 +34,8 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
         "3.10",
         "3.11",
         "3.12",
+        "3.13",
+        "3.14",
     ]
 )
 @nox.parametrize(
