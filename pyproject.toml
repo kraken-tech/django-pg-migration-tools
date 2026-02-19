@@ -79,7 +79,7 @@ dev = [
     # Testing
     "django_pg_migration_tools[pytest-in-nox-psycopg3]",
     "django_pg_migration_tools[docs]",
-    "django>=4.2.0",  # Django is needed for `make test`, but not for `nox`.
+    "django>=5.2.8",  # Django is needed for `make test`, but not for `nox`.
 
     # Linting
     "ruff>=0.5.2",

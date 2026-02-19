@@ -48,8 +48,6 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
 @nox.parametrize(
     "django_version",
     [
-        nox.param("4.2", id="django~=4.2"),
-        nox.param("5.0", id="django~=5.0"),
         nox.param("5.2", id="django~=5.2"),
         nox.param("6.0", id="django~=6.0"),
     ],
