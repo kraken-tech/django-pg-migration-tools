@@ -8,7 +8,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
-_No notable unreleased changes_
+- Updated the "make constraint" queries to be schema-aware (for multi-tenancy).
 
 ## [0.1.24] - 2025-12-12
 
