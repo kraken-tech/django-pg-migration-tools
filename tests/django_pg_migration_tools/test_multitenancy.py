@@ -8,10 +8,14 @@ detect constraints from other schemas in multi-tenant setups.
 import pytest
 from django.db import connection
 from django.db.migrations.state import ModelState, ProjectState
-from django.db.models import CheckConstraint, Q, UniqueConstraint
+from django.db.models import Q, UniqueConstraint
 
 from django_pg_migration_tools import operations
-from tests.example_app.models import IntModel, ModelWithCheckConstraint
+from tests.example_app.models import (
+    IntModel,
+    ModelWithCheckConstraint,
+    get_check_constraint,
+)
 
 
 try:
@@ -292,7 +296,7 @@ class TestMultiSchemaConstraints:
 
         operation = operations.SaferAddCheckConstraint(
             model_name="modelwithcheckconstraint",
-            constraint=CheckConstraint(
+            constraint=get_check_constraint(
                 condition=Q(id__gte=1), name="check_id_multitenancy_test"
             ),
         )
