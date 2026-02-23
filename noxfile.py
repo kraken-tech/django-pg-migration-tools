@@ -33,8 +33,8 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
 @nox.parametrize(
     "dependency_file",
     [
-        nox.param("pytest-in-nox-psycopg3", id="psycopg3"),
         nox.param("pytest-in-nox-psycopg2", id="psycopg2"),
+        nox.param("pytest-in-nox-psycopg3", id="psycopg3"),
     ],
 )
 @nox.parametrize(
