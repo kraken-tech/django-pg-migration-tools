@@ -2771,18 +2771,22 @@ class TestSaferRemoveFieldForeignKey:
         )
         assert second_reverse_queries[2]["sql"] == dedent(
             """
-            SELECT conname
-            FROM pg_catalog.pg_constraint
-            WHERE conname = 'example_app_modelwithforeignkey_fk_id_fk';
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'example_app_modelwithforeignkey_fk_id_fk'
+                AND nsp.nspname = current_schema();
         """
         )
         assert second_reverse_queries[3]["sql"] == dedent(
             """
             SELECT 1
-            FROM pg_catalog.pg_constraint
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
             WHERE
-                conname = 'example_app_modelwithforeignkey_fk_id_fk'
-                AND convalidated IS TRUE;
+                con.conname = 'example_app_modelwithforeignkey_fk_id_fk'
+                AND con.convalidated IS TRUE
+                AND nsp.nspname = current_schema();
         """
         )
 
