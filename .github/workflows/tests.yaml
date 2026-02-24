@@ -14,10 +14,11 @@ jobs:
     strategy:
       matrix:
         postgres-image:
-          - "postgres:13"
           - "postgres:14"
           - "postgres:15"
           - "postgres:16"
+          - "postgres:17"
+          - "postgres:18"
 
     services:
       postgres:
@@ -40,9 +41,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: |
-            3.12
-            3.11
             3.10
+            3.11
+            3.12
+            3.13
+            3.14
           cache: 'pip'
           cache-dependency-path: |
             pyproject.toml

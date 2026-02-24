@@ -29,37 +29,46 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
         yield f
 
 
-@nox.session()
+INCOMPATIBLE_PYTHON_DJANGO_VERSIONS = [
+    ("3.10", "6.0"),
+    ("3.11", "6.0"),
+]
+
+
+@nox.session(
+    python=[
+        "3.10",
+        "3.11",
+        "3.12",
+        "3.13",
+        "3.14",
+    ]
+)
 @nox.parametrize(
     "dependency_file",
     [
-        nox.param("pytest-in-nox-psycopg3", id="psycopg3"),
         nox.param("pytest-in-nox-psycopg2", id="psycopg2"),
+        nox.param("pytest-in-nox-psycopg3", id="psycopg3"),
     ],
 )
 @nox.parametrize(
-    "package_constraint",
+    "django_version",
     [
-        nox.param("django>=4.2,<4.3", id="django=4.2.X"),
-        nox.param("django>=5.0,<5.1", id="django=5.0.X"),
+        nox.param("5.2", id="django~=5.2"),
+        nox.param("6.0", id="django~=6.0"),
     ],
 )
-@nox.parametrize(
-    "python",
-    [
-        nox.param("3.10", id="python=3.10"),
-        nox.param("3.11", id="python=3.11"),
-        nox.param("3.12", id="python=3.12"),
-    ],
-)
-def tests(session: nox.Session, package_constraint: str, dependency_file: str) -> None:
+def tests(session: nox.Session, django_version: str, dependency_file: str) -> None:
     """
     Run the test suite.
     """
+    if (session.python, django_version) in INCOMPATIBLE_PYTHON_DJANGO_VERSIONS:
+        session.skip()
+
     with temp_constraints_file() as constraints_file, temp_lock_file() as lock_file:
         # Create a constraints file with the parameterized package versions.
         # It's easy to add more constraints here if needed.
-        constraints_file.write(f"{package_constraint}\n")
+        constraints_file.write(f"django~={django_version}\n")
         constraints_file.flush()
 
         # Compile a new development lock file with the additional package
