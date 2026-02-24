@@ -29,7 +29,13 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
         yield f
 
 
-@nox.session()
+@nox.session(
+    python=[
+        "3.10",
+        "3.11",
+        "3.12",
+    ]
+)
 @nox.parametrize(
     "dependency_file",
     [
@@ -42,14 +48,6 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
     [
         nox.param("django>=4.2,<4.3", id="django=4.2.X"),
         nox.param("django>=5.0,<5.1", id="django=5.0.X"),
-    ],
-)
-@nox.parametrize(
-    "python",
-    [
-        nox.param("3.10", id="python=3.10"),
-        nox.param("3.11", id="python=3.11"),
-        nox.param("3.12", id="python=3.12"),
     ],
 )
 def tests(session: nox.Session, package_constraint: str, dependency_file: str) -> None:
