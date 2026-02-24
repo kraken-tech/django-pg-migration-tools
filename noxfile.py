@@ -29,6 +29,12 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
         yield f
 
 
+INCOMPATIBLE_PYTHON_DJANGO_VERSIONS = [
+    ("3.10", "6.0"),
+    ("3.11", "6.0"),
+]
+
+
 @nox.session(
     python=[
         "3.10",
@@ -56,6 +62,9 @@ def tests(session: nox.Session, django_version: str, dependency_file: str) -> No
     """
     Run the test suite.
     """
+    if (session.python, django_version) in INCOMPATIBLE_PYTHON_DJANGO_VERSIONS:
+        session.skip()
+
     with temp_constraints_file() as constraints_file, temp_lock_file() as lock_file:
         # Create a constraints file with the parameterized package versions.
         # It's easy to add more constraints here if needed.
