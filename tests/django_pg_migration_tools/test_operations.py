@@ -1,5 +1,6 @@
 from textwrap import dedent
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from django.db import (
@@ -1435,6 +1436,144 @@ class TestSaferAddUniqueConstraint:
                 },
             )
             assert not cursor.fetchone()
+
+    # Disable the overall test transaction because a unique concurrent index
+    # cannot be triggered/tested inside of a transaction.
+    @pytest.mark.django_db(transaction=True)
+    def test_when_nulls_not_distinct(self):
+        # Prove that:
+        #   - An invalid index doesn't exist.
+        #   - The constraint doesn't exist yet.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                psycopg_sql.SQL(operations.IndexQueries.CHECK_INVALID_INDEX)
+                .format(index_name=psycopg_sql.Literal("unique_null_int_field"))
+                .as_string(cursor.connection)
+            )
+            assert not cursor.fetchone()
+            cursor.execute(
+                psycopg_sql.SQL(operations.ConstraintQueries.CHECK_EXISTING_CONSTRAINT)
+                .format(constraint_name=psycopg_sql.Literal("unique_null_int_field"))
+                .as_string(cursor.connection)
+            )
+            assert not cursor.fetchone()
+            # Also, set the lock_timeout to check it has been returned to
+            # its original value once the unique index creation is completed.
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddUniqueConstraint(
+            model_name="nullintfieldmodel",
+            constraint=UniqueConstraint(
+                fields=("int_field",),
+                name="unique_null_int_field",
+                nulls_distinct=False,
+            ),
+        )
+        operation.state_forwards(self.app_label, new_state)
+        # Proceed to add the unique index followed by the constraint:
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            if not connection.features.supports_nulls_distinct_unique_constraints:
+                # Postgres versions <= 14 do not support NULLS NOT DISTINCT
+                with pytest.raises(operations.ConstraintNotSupported):
+                    operation.database_forwards(
+                        self.app_label,
+                        editor,
+                        from_state=project_state,
+                        to_state=new_state,
+                    )
+                return
+
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_INDEX_EXISTS_QUERY,
+                {
+                    "table_name": "example_app_nullintfieldmodel",
+                    "index_name": "unique_null_int_field",
+                },
+            )
+            assert cursor.fetchone()
+            cursor.execute(
+                _CHECK_CONSTRAINT_EXISTS_QUERY,
+                {
+                    "table_name": "example_app_nullintfieldmodel",
+                    "constraint_name": "unique_null_int_field",
+                },
+            )
+            assert cursor.fetchone()
+
+        # Assert on the sequence of expected SQL queries:
+        #
+        # 1. Check if the constraint already exists.
+        assert queries[0]["sql"] == dedent("""
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
+            WHERE con.conname = 'unique_null_int_field'
+                AND nsp.nspname = current_schema();
+            """)
+        # 2. Check the original lock_timeout value to be able to restore it
+        # later.
+        assert queries[1]["sql"] == "SHOW lock_timeout;"
+        # 3. Remove the timeout.
+        assert queries[2]["sql"] == "SET lock_timeout = '0';"
+        # 4. Verify if the index is invalid.
+        assert queries[3]["sql"] == dedent("""
+            SELECT relname
+            FROM pg_class, pg_index
+            WHERE (
+                pg_index.indisvalid = false
+                AND pg_index.indexrelid = pg_class.oid
+                AND relname = 'unique_null_int_field'
+            );
+            """)
+        # 5. Finally create the index concurrently.
+        assert (
+            queries[4]["sql"]
+            == 'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "unique_null_int_field" ON "example_app_nullintfieldmodel" ("int_field") NULLS NOT DISTINCT'
+        )
+        # 6. Set the timeout back to what it was originally.
+        assert queries[5]["sql"] == "SET lock_timeout = '1s';"
+
+        # 7. Add the table constraint.
+        assert (
+            queries[6]["sql"]
+            == 'ALTER TABLE "example_app_nullintfieldmodel" ADD CONSTRAINT "unique_null_int_field" UNIQUE USING INDEX "unique_null_int_field"'
+        )
+
+    def test_when_nulls_not_distinct_and_not_supported(self):
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(NullIntFieldModel))
+        new_state = project_state.clone()
+
+        operation = operations.SaferAddUniqueConstraint(
+            model_name="nullintfieldmodel",
+            constraint=UniqueConstraint(
+                fields=("int_field",),
+                name="unique_null_int_field",
+                nulls_distinct=False,
+            ),
+        )
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with patch.object(
+                connection, "features", supports_nulls_distinct_unique_constraints=False
+            ):
+                # Postgres versions <= 14 do not support NULLS NOT DISTINCT
+                with pytest.raises(operations.ConstraintNotSupported):
+                    operation.database_forwards(
+                        self.app_label,
+                        editor,
+                        from_state=project_state,
+                        to_state=new_state,
+                    )
 
 
 class TestBuildPostgresIdentifier:
