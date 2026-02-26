@@ -267,6 +267,7 @@ class SafeIndexOperationManager(
         index: models.Index | IndexSQLBuilder,
         unique: bool,
         model: type[models.Model],
+        nulls_distinct: bool = True,
     ) -> None:
         self._ensure_not_in_transaction(schema_editor)
 
@@ -283,6 +284,7 @@ class SafeIndexOperationManager(
             model=model,
             schema_editor=schema_editor,
             index=index,
+            nulls_distinct=nulls_distinct,
         )
         schema_editor.execute(index_sql)
 
@@ -374,6 +376,7 @@ class SafeIndexOperationManager(
         model: type[models.Model],
         schema_editor: base_schema.BaseDatabaseSchemaEditor,
         index: models.Index | IndexSQLBuilder,
+        nulls_distinct: bool,
     ) -> str:
         if isinstance(index, IndexSQLBuilder):
             assert model._meta.db_table == index.table_name
@@ -388,6 +391,9 @@ class SafeIndexOperationManager(
         if unique:
             index_sql = index_sql.replace("CREATE INDEX", "CREATE UNIQUE INDEX")
 
+        if not nulls_distinct:
+            index_sql += " NULLS NOT DISTINCT"
+
         return index_sql
 
 
@@ -396,6 +402,10 @@ class ConstraintOperationError(Exception):
 
 
 class ConstraintAlreadyExists(ConstraintOperationError):
+    pass
+
+
+class ConstraintNotSupported(ConstraintOperationError):
     pass
 
 
@@ -419,6 +429,20 @@ class SafeConstraintOperationManager(base_operations.Operation):
 
         index = self._get_index_for_constraint(constraint)
 
+        if constraint.nulls_distinct is None or constraint.nulls_distinct is True:
+            nulls_distinct = True
+        else:
+            nulls_distinct = False
+
+        if (
+            not nulls_distinct
+            and not schema_editor.connection.features.supports_nulls_distinct_unique_constraints
+        ):
+            # Postgres versions <= 14 do not support NULLS NOT DISTINCT
+            raise ConstraintNotSupported(
+                "Constraints with NULLS NOT DISTINCT are not supported with this PostgreSQL version"
+            )
+
         if (constraint.condition is not None) or constraint.expressions:
             """
             Unique constraints with conditions/expressions do not exist in postgres.
@@ -434,6 +458,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
                 index=index,
                 model=model,
                 unique=True,
+                nulls_distinct=nulls_distinct,
             )
             return
 
@@ -448,6 +473,7 @@ class SafeConstraintOperationManager(base_operations.Operation):
             index=index,
             model=model,
             unique=True,
+            nulls_distinct=nulls_distinct,
         )
 
         # Django doesn't have a handy flag "using=..." so we need to alter the

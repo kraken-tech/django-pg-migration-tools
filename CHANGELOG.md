@@ -8,7 +8,12 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
-_No notable unreleased changes_
+- Fixed a bug where a unique constraint with `nulls_distinct=False` was created
+  without "NULLS NOT DISTINCT" by `SaferAddUniqueConstraint`.
+- Fixed a bug where a unique constraint with `nulls_distinct=False` resulted in
+  invalid SQL when `SaferAddUniqueConstraint` was used with PostgreSQL 14.x or
+  earlier (which does not support "NULLS NOT DISTINCT"). The operation will now
+  raise a `ConstraintNotSupported` exception instead.
 
 ## [0.1.25] - 2026-02-24
 
