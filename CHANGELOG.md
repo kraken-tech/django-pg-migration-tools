@@ -8,6 +8,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
+- Updated supported versions of Python, Django and Postgres as follows:
+  - Added support for Python 3.13 and 3.14
+  - Dropped support for Django 4.2 and 5.0 and added support for Django 5.2 and 6.0
+  - Dropped support for Postgre 13 and added support for Postgres 17 and 18
 - Fixed a bug where a unique constraint with `nulls_distinct=False` was created
   without "NULLS NOT DISTINCT" by `SaferAddUniqueConstraint`.
 - Fixed a bug where a unique constraint with `nulls_distinct=False` resulted in
