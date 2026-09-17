@@ -7,8 +7,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
-_No notable unreleased changes_
+- Fixed a bug where a Foreign Key with `db_constraint=False` in `SaferAddFieldForeignKey`
+  still created a constraint.
 
 ## [0.1.26] - 2026-02-27
 
