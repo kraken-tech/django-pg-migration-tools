@@ -1264,8 +1264,8 @@ class ForeignKeyManager(base_operations.Operation):
             self._alter_table_add_null_column()
             self._maybe_create_unique_constraint()
             self._maybe_create_index()
-            self._alter_table_add_not_valid_fk()
-            self._alter_table_validate_constraint()
+            self._maybe_alter_table_add_not_valid_fk()
+            self._maybe_alter_table_validate_constraint()
             return
 
         if self.unique:
@@ -1283,17 +1283,17 @@ class ForeignKeyManager(base_operations.Operation):
             and (not self._valid_index_exists())
         ):
             self._maybe_create_index()
-            self._alter_table_add_not_valid_fk()
-            self._alter_table_validate_constraint()
+            self._maybe_alter_table_add_not_valid_fk()
+            self._maybe_alter_table_validate_constraint()
             return
 
         if not self._constraint_exists():
-            self._alter_table_add_not_valid_fk()
-            self._alter_table_validate_constraint()
+            self._maybe_alter_table_add_not_valid_fk()
+            self._maybe_alter_table_validate_constraint()
             return
 
         if not self._is_constraint_valid():
-            self._alter_table_validate_constraint()
+            self._maybe_alter_table_validate_constraint()
             return
 
     def drop_fk_field(self) -> None:
@@ -1438,31 +1438,41 @@ class ForeignKeyManager(base_operations.Operation):
             .as_string(self.schema_editor.connection.connection),
         )
 
-    def _alter_table_add_not_valid_fk(self) -> None:
-        remote_model = self._get_remote_model()
-        remote_target_field = self._get_target_field()
-        referred_column_name = remote_target_field.db_column or remote_target_field.name
-        self.schema_editor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK)
-            .format(
-                table_name=psycopg_sql.Identifier(self.table_name),
-                column_name=psycopg_sql.Identifier(self.column_name),
-                constraint_name=psycopg_sql.Identifier(self.constraint_name),
-                referred_table_name=psycopg_sql.Identifier(remote_model._meta.db_table),
-                referred_column_name=psycopg_sql.Identifier(referred_column_name),
+    def _maybe_alter_table_add_not_valid_fk(self) -> None:
+        assert self.field is not None
+        assert hasattr(self.field, "db_constraint")
+        if self.field.db_constraint:
+            remote_model = self._get_remote_model()
+            remote_target_field = self._get_target_field()
+            referred_column_name = (
+                remote_target_field.db_column or remote_target_field.name
             )
-            .as_string(self.schema_editor.connection.connection)
-        )
+            self.schema_editor.execute(
+                psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_ADD_NOT_VALID_FK)
+                .format(
+                    table_name=psycopg_sql.Identifier(self.table_name),
+                    column_name=psycopg_sql.Identifier(self.column_name),
+                    constraint_name=psycopg_sql.Identifier(self.constraint_name),
+                    referred_table_name=psycopg_sql.Identifier(
+                        remote_model._meta.db_table
+                    ),
+                    referred_column_name=psycopg_sql.Identifier(referred_column_name),
+                )
+                .as_string(self.schema_editor.connection.connection)
+            )
 
-    def _alter_table_validate_constraint(self) -> None:
-        self.schema_editor.execute(
-            psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
-            .format(
-                table_name=psycopg_sql.Identifier(self.table_name),
-                constraint_name=psycopg_sql.Identifier(self.constraint_name),
+    def _maybe_alter_table_validate_constraint(self) -> None:
+        assert self.field is not None
+        assert hasattr(self.field, "db_constraint")
+        if self.field.db_constraint:
+            self.schema_editor.execute(
+                psycopg_sql.SQL(ConstraintQueries.ALTER_TABLE_VALIDATE_CONSTRAINT)
+                .format(
+                    table_name=psycopg_sql.Identifier(self.table_name),
+                    constraint_name=psycopg_sql.Identifier(self.constraint_name),
+                )
+                .as_string(self.schema_editor.connection.connection)
             )
-            .as_string(self.schema_editor.connection.connection)
-        )
 
     def _alter_table_drop_column(self) -> None:
         self.schema_editor.execute(
