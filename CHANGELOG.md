@@ -9,6 +9,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 ## [Unreleased]
 - Fixed a bug where a Foreign Key with `db_constraint=False` in `SaferAddFieldForeignKey`
   still created a constraint.
+- Dropped testing for Postgres 14.
 
 ## [0.1.26] - 2026-02-27
 
