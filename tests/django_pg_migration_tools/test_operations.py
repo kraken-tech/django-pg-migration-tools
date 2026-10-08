@@ -3875,6 +3875,103 @@ class TestSaferAddFieldForeignKey:
         """)
 
     @pytest.mark.django_db(transaction=True)
+    def test_operation_when_db_constraint_is_false(self):
+        with connection.cursor() as cursor:
+            # Set the lock_timeout to check it has been returned to
+            # its original value once the fk index creation is completed.
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        project_state.add_model(ModelState.from_model(CharModel))
+        new_state = project_state.clone()
+        operation = operations.SaferAddFieldForeignKey(
+            model_name="intmodel",
+            name="char_model_field",
+            field=models.ForeignKey(
+                CharModel, null=True, db_constraint=False, on_delete=models.CASCADE
+            ),
+        )
+
+        assert operation.describe() == (
+            "Add field char_model_field to intmodel. Note: Using "
+            "django_pg_migration_tools SaferAddFieldForeignKey operation."
+        )
+
+        operation.state_forwards(self.app_label, new_state)
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as queries:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+        assert len(queries) == 7
+
+        assert queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_intmodel'::regclass
+                AND attname = 'char_model_field_id';
+        """)
+        assert queries[1]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            ADD COLUMN IF NOT EXISTS "char_model_field_id"
+            integer NULL;
+        """)
+        assert queries[2]["sql"] == "SHOW lock_timeout;"
+        assert queries[3]["sql"] == "SET lock_timeout = '0';"
+        assert queries[4]["sql"] == dedent("""
+            SELECT relname
+            FROM pg_class, pg_index
+            WHERE (
+                pg_index.indisvalid = false
+                AND pg_index.indexrelid = pg_class.oid
+                AND relname = 'intmodel_char_model_field_id_idx'
+            );
+            """)
+        assert (
+            queries[5]["sql"]
+            == 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "intmodel_char_model_field_id_idx" ON "example_app_intmodel" ("char_model_field_id");'
+        )
+        assert queries[6]["sql"] == "SET lock_timeout = '1s';"
+
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+        assert len(reverse_queries) == 2
+
+        assert reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_intmodel'::regclass
+                AND attname = 'char_model_field_id';
+        """)
+        assert reverse_queries[1]["sql"] == dedent("""
+            ALTER TABLE "example_app_intmodel"
+            DROP COLUMN "char_model_field_id";
+        """)
+
+        # Reversing again does nothing apart from checking the field doesn't
+        # exist anymore. This check the reverse migration is idempotent.
+        with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+            with utils.CaptureQueriesContext(connection) as second_reverse_queries:
+                operation.database_backwards(
+                    self.app_label, editor, from_state=new_state, to_state=project_state
+                )
+        assert len(second_reverse_queries) == 1
+
+        assert second_reverse_queries[0]["sql"] == dedent("""
+            SELECT 1
+            FROM pg_catalog.pg_attribute
+            WHERE
+                attrelid = 'example_app_intmodel'::regclass
+                AND attname = 'char_model_field_id';
+        """)
+
+    @pytest.mark.django_db(transaction=True)
     def test_operation_when_related_model_does_not_use_int_id(self):
         with connection.cursor() as cursor:
             # Set the lock_timeout to check it has been returned to
