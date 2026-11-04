@@ -1048,7 +1048,7 @@ class NullsManager(base_operations.Operation):
         Here we just give it some resemblance to the table and column names the
         constraint was created from.
         """
-        suffix: str = django_backends_utils.names_digest(  # type:ignore[attr-defined]
+        suffix: str = django_backends_utils.names_digest(
             table_name, column_name, length=10
         )
         return f"{table_name[:10]}_{column_name[:10]}_{suffix}"
@@ -1649,7 +1649,7 @@ class SaferAddCheckConstraint(operation_models.AddConstraint):
         model_name: str,
         constraint: models.CheckConstraint,
     ) -> None:
-        self.constraint = constraint
+        self.constraint: models.CheckConstraint = constraint
         self.model_name = model_name
         # Perform a basic input-validation at initialisation time
         self._validate()
