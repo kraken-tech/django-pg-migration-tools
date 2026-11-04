@@ -176,7 +176,7 @@ ruff==0.17.3
     # via django-pg-migration-tools (pyproject.toml)
 snowballstemmer==3.1.1
     # via sphinx
-sphinx==9.2.0
+sphinx==9.0.4
     # via
     #   django-pg-migration-tools (pyproject.toml)
     #   sphinx-design
