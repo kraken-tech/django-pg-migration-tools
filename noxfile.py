@@ -31,7 +31,9 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
 
 INCOMPATIBLE_PYTHON_DJANGO_VERSIONS = [
     ("3.11", "6.0"),
+    ("3.15", "6.0"),
     ("3.11", "6.1"),
+    ("3.15", "5.2"),
 ]
 
 
@@ -41,6 +43,7 @@ INCOMPATIBLE_PYTHON_DJANGO_VERSIONS = [
         "3.12",
         "3.13",
         "3.14",
+        "3.15",
     ]
 )
 @nox.parametrize(
