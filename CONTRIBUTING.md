@@ -52,7 +52,7 @@ To test against all supported Python (and relevant package) versions, have
 [**nox**](https://nox.thea.codes/en/stable/) for installation details.
 
 Ensure that all the supported Python versions (see README) are installed on
-your system. For example, `python3.10`, `python3.11`, etc. This can be done
+your system. For example, `python3.11`, `python3.12`, etc. This can be done
 with [**pyenv**](https://github.com/pyenv/pyenv), or your operating system
 might have its own way of providing these packages for you.
 

@@ -30,14 +30,12 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
 
 
 INCOMPATIBLE_PYTHON_DJANGO_VERSIONS = [
-    ("3.10", "6.0"),
     ("3.11", "6.0"),
 ]
 
 
 @nox.session(
     python=[
-        "3.10",
         "3.11",
         "3.12",
         "3.13",
