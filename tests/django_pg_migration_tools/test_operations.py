@@ -4681,7 +4681,7 @@ class TestSaferSaferAddFieldOneToOne:
         operation = operations.SaferAddFieldOneToOne(
             model_name="intmodel",
             name="char_model_field",
-            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),
+            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),  # type: ignore[misc]
         )
         with pytest.raises(NotSupportedError):
             with connection.schema_editor(atomic=True) as editor:
@@ -4718,7 +4718,10 @@ class TestSaferSaferAddFieldOneToOne:
                 model_name="intmodel",
                 name="char_model_field",
                 field=models.OneToOneField(
-                    CharModel, primary_key=True, null=True, on_delete=models.CASCADE
+                    CharModel,
+                    primary_key=True,
+                    null=True,
+                    on_delete=models.CASCADE,  # type: ignore[misc]
                 ),
             )
 
@@ -4731,7 +4734,7 @@ class TestSaferSaferAddFieldOneToOne:
         operation = operations.SaferAddFieldOneToOne(
             model_name="intmodel",
             name="char_model_field",
-            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),
+            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),  # type: ignore[misc]
         )
 
         with connection.schema_editor(atomic=False, collect_sql=False) as editor:
@@ -4766,7 +4769,9 @@ class TestSaferSaferAddFieldOneToOne:
         project_state.add_model(ModelState.from_model(CharModel))
         new_state = project_state.clone()
         field: models.OneToOneField[models.Model] = models.OneToOneField(
-            CharModel, null=True, on_delete=models.CASCADE
+            CharModel,
+            null=True,
+            on_delete=models.CASCADE,  # type: ignore[misc]
         )
         operation = operations.SaferAddFieldOneToOne(
             model_name="intmodel",
@@ -4897,7 +4902,7 @@ class TestSaferSaferAddFieldOneToOne:
         operation = operations.SaferAddFieldOneToOne(
             model_name="intmodel",
             name="char_model_field",
-            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),
+            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),  # type: ignore[misc]
         )
         operation.state_forwards(self.app_label, new_state)
 
@@ -4956,7 +4961,7 @@ class TestSaferSaferAddFieldOneToOne:
         operation = operations.SaferAddFieldOneToOne(
             model_name="intmodel",
             name="char_model_field",
-            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),
+            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),  # type: ignore[misc]
         )
         operation.state_forwards(self.app_label, new_state)
 
@@ -5064,7 +5069,7 @@ class TestSaferSaferAddFieldOneToOne:
         operation = operations.SaferAddFieldOneToOne(
             model_name="intmodel",
             name="char_model_field",
-            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),
+            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),  # type: ignore[misc]
         )
         operation.state_forwards(self.app_label, new_state)
 
@@ -5160,7 +5165,7 @@ class TestSaferSaferAddFieldOneToOne:
         operation = operations.SaferAddFieldOneToOne(
             model_name="intmodel",
             name="char_model_field",
-            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),
+            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),  # type: ignore[misc]
         )
         operation.state_forwards(self.app_label, new_state)
 
@@ -5257,7 +5262,7 @@ class TestSaferSaferAddFieldOneToOne:
         operation = operations.SaferAddFieldOneToOne(
             model_name="intmodel",
             name="char_model_field",
-            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),
+            field=models.OneToOneField(CharModel, null=True, on_delete=models.CASCADE),  # type: ignore[misc]
         )
         operation.state_forwards(self.app_label, new_state)
 
@@ -5328,7 +5333,9 @@ class TestSaferSaferAddFieldOneToOne:
             model_name="intmodel",
             name="char_id_model_field",
             field=models.OneToOneField(
-                CharIDModel, null=True, on_delete=models.CASCADE
+                CharIDModel,
+                null=True,
+                on_delete=models.CASCADE,  # type: ignore[misc]
             ),
         )
         operation.state_forwards(self.app_label, new_state)

@@ -1,22 +1,12 @@
-import django
 from django.db import models
 from django.db.models import functions
 
 
 def get_check_constraint(condition: models.Q, name: str) -> models.CheckConstraint:
-    if django.VERSION >= (5, 1):
-        # https://docs.djangoproject.com/en/5.1/releases/5.1/
-        # The check keyword argument of CheckConstraint is deprecated in
-        # favor of condition.
-        return models.CheckConstraint(
-            condition=condition,
-            name=name,
-        )
-    else:
-        return models.CheckConstraint(
-            check=condition,
-            name=name,
-        )
+    return models.CheckConstraint(
+        condition=condition,
+        name=name,
+    )
 
 
 class IntModel(models.Model):
