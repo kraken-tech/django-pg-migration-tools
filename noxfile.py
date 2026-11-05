@@ -31,6 +31,7 @@ def temp_lock_file() -> Generator[IO[str], None, None]:
 
 INCOMPATIBLE_PYTHON_DJANGO_VERSIONS = [
     ("3.11", "6.0"),
+    ("3.11", "6.1"),
 ]
 
 
@@ -54,6 +55,7 @@ INCOMPATIBLE_PYTHON_DJANGO_VERSIONS = [
     [
         nox.param("5.2", id="django~=5.2"),
         nox.param("6.0", id="django~=6.0"),
+        nox.param("6.1", id="django~=6.1"),
     ],
 )
 def tests(session: nox.Session, django_version: str, dependency_file: str) -> None:
