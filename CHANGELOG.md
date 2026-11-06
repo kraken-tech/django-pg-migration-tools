@@ -7,6 +7,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+_No notable unreleased changes_
+
+## [0.2.0] - 2026-11-06
 - Fixed a bug where a Foreign Key with `db_constraint=False` in `SaferAddFieldForeignKey`
   still created a constraint.
 - Dropped testing for Postgres 14.
@@ -266,7 +270,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 - `SaferAddIndexConcurrently` migration operation to create new Postgres
   indexes in a safer, idempotent way.
 
-[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.26...HEAD
+[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.26...v0.2.0
 [0.1.26]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.23...v0.1.24
