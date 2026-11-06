@@ -10,6 +10,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 - Fixed a bug where a Foreign Key with `db_constraint=False` in `SaferAddFieldForeignKey`
   still created a constraint.
 - Dropped testing for Postgres 14.
+- Updated supported versions of Python, Django and Postgres as follows:
+  - Added support for Python 3.15
+  - Added support for Django 6.1
+  - Dropped support for Python 3.10
+- Updated package dependencies
 
 ## [0.1.26] - 2026-02-27
 
