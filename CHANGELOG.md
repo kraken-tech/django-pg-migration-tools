@@ -7,18 +7,25 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+_No notable unreleased changes_
+
+## [0.2.0] - 2026-11-06
 - Fixed a bug where a Foreign Key with `db_constraint=False` in `SaferAddFieldForeignKey`
   still created a constraint.
 - Dropped testing for Postgres 14.
+- Updated supported versions of Python, Django and Postgres as follows:
+  - Added support for Python 3.15
+  - Added support for Django 6.1
+  - Dropped support for Python 3.10
+- Updated package dependencies
 
 ## [0.1.26] - 2026-02-27
 
 - Updated supported versions of Python, Django and Postgres as follows:
-  - Added support for Python 3.13, 3.14 and 3.15
-  - Dropped support for Django 4.2 and 5.0 and added support for Django 5.2, 6.0 and 6.1
+  - Added support for Python 3.13 and 3.14
+  - Dropped support for Django 4.2 and 5.0 and added support for Django 5.2 and 6.0
   - Dropped support for Postgre 13 and added support for Postgres 17 and 18
-  - Dropped support for Python 3.10
-- Updated package dependencies
 - Fixed a bug where a unique constraint with `nulls_distinct=False` was created
   without "NULLS NOT DISTINCT" by `SaferAddUniqueConstraint`.
 - Fixed a bug where a unique constraint with `nulls_distinct=False` resulted in
@@ -263,7 +270,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 - `SaferAddIndexConcurrently` migration operation to create new Postgres
   indexes in a safer, idempotent way.
 
-[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.26...HEAD
+[Unreleased]: https://github.com/octoenergy/django-migration-helpers/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.26...v0.2.0
 [0.1.26]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/octoenergy/django-migration-helpers/compare/v0.1.23...v0.1.24
