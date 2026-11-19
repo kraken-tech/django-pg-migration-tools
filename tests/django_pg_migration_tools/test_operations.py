@@ -1,3 +1,5 @@
+import datetime
+from collections.abc import Iterator
 from textwrap import dedent
 from typing import Any
 from unittest.mock import patch
@@ -5,8 +7,11 @@ from unittest.mock import patch
 import pytest
 from django.db import (
     NotSupportedError,
+    OperationalError,
     connection,
+    connections,
     models,
+    transaction,
 )
 from django.db.migrations.state import (
     ModelState,
@@ -5703,3 +5708,245 @@ class TestSaferRemoveCheckConstraint:
             ALTER TABLE "example_app_modelwithcheckconstraint"
             VALIDATE CONSTRAINT "id_must_be_42";
         """)
+
+
+_LOCK_INT_MODEL_TABLE = """
+LOCK TABLE "example_app_intmodel" IN SHARE UPDATE EXCLUSIVE MODE;
+"""
+
+
+class TestIndexLockTimeout:
+    app_label = "example_app"
+
+    @pytest.fixture(autouse=True)
+    def drop_int_field_idx(self, transactional_db: None) -> Iterator[None]:
+        """
+        Make sure `int_field_idx` doesn't exist before or after each test.
+
+        Flushing the database between transactional tests doesn't drop
+        indexes, and other tests in this module leave this one behind.
+        """
+        drop_index = 'DROP INDEX IF EXISTS "int_field_idx";'
+        with connection.cursor() as cursor:
+            cursor.execute(drop_index)
+        yield
+        with connection.cursor() as cursor:
+            cursor.execute(drop_index)
+
+    def _states(self) -> tuple[ProjectState, ProjectState]:
+        project_state = ProjectState()
+        project_state.add_model(ModelState.from_model(IntModel))
+        return project_state, project_state.clone()
+
+    def _add_index_operation(self) -> operations.SaferAddIndexConcurrently:
+        return operations.SaferAddIndexConcurrently(
+            "IntModel", Index(fields=["int_field"], name="int_field_idx")
+        )
+
+    # Disable the overall test transaction because a concurrent index cannot
+    # be triggered/tested inside of a transaction.
+    @pytest.mark.django_db(transaction=True)
+    def test_none_keeps_the_session_lock_timeout(self):
+        with connection.cursor() as cursor:
+            # Create an invalid index to check it is still dropped and
+            # re-created inside the context.
+            cursor.execute(_CREATE_INDEX_QUERY, {"index_name": "int_field_idx"})
+            cursor.execute(_SET_INDEX_INVALID, {"index_name": "int_field_idx"})
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        project_state, new_state = self._states()
+        add_operation = self._add_index_operation()
+        add_operation.state_forwards(self.app_label, new_state)
+
+        with operations.index_lock_timeout(None):
+            with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+                with utils.CaptureQueriesContext(connection) as queries:
+                    add_operation.database_forwards(
+                        self.app_label,
+                        editor,
+                        from_state=project_state,
+                        to_state=new_state,
+                    )
+
+        # No lock_timeout queries: the operation only drops the invalid index
+        # and creates it again.
+        assert len(queries) == 3
+        assert "indisvalid = false" in queries[0]["sql"]
+        assert queries[1]["sql"] == 'DROP INDEX CONCURRENTLY IF EXISTS "int_field_idx";'
+        assert (
+            queries[2]["sql"]
+            == 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "int_field_idx" ON "example_app_intmodel" ("int_field")'
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_VALID_INDEX_EXISTS_QUERY, {"index_name": "int_field_idx"}
+            )
+            assert cursor.fetchone()
+            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
+            assert cursor.fetchone()[0] == "1s"
+
+        remove_operation = operations.SaferRemoveIndexConcurrently(
+            "IntModel", "int_field_idx"
+        )
+        removed_state = new_state.clone()
+        remove_operation.state_forwards(self.app_label, removed_state)
+
+        with operations.index_lock_timeout(None):
+            with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+                with utils.CaptureQueriesContext(connection) as remove_queries:
+                    remove_operation.database_forwards(
+                        self.app_label,
+                        editor,
+                        from_state=new_state,
+                        to_state=removed_state,
+                    )
+
+        assert len(remove_queries) == 1
+        assert (
+            remove_queries[0]["sql"]
+            == 'DROP INDEX CONCURRENTLY IF EXISTS "int_field_idx"'
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_INDEX_EXISTS_QUERY,
+                {"table_name": "example_app_intmodel", "index_name": "int_field_idx"},
+            )
+            assert not cursor.fetchone()
+            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
+            assert cursor.fetchone()[0] == "1s"
+
+    # Disable the overall test transaction because a concurrent index cannot
+    # be triggered/tested inside of a transaction.
+    @pytest.mark.django_db(transaction=True)
+    def test_timedelta_sets_the_lock_timeout_for_index_operations(self):
+        with connection.cursor() as cursor:
+            cursor.execute(_SET_LOCK_TIMEOUT)
+
+        project_state, new_state = self._states()
+        operation = self._add_index_operation()
+
+        with operations.index_lock_timeout(datetime.timedelta(seconds=5)):
+            with connection.schema_editor(atomic=False, collect_sql=False) as editor:
+                with utils.CaptureQueriesContext(connection) as queries:
+                    operation.database_forwards(
+                        self.app_label,
+                        editor,
+                        from_state=project_state,
+                        to_state=new_state,
+                    )
+
+        assert len(queries) == 5
+        assert queries[0]["sql"] == "SHOW lock_timeout;"
+        assert queries[1]["sql"] == "SET lock_timeout = '5000ms';"
+        assert "indisvalid = false" in queries[2]["sql"]
+        assert (
+            queries[3]["sql"]
+            == 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "int_field_idx" ON "example_app_intmodel" ("int_field")'
+        )
+        assert queries[4]["sql"] == "SET lock_timeout = '1s';"
+        with connection.cursor() as cursor:
+            cursor.execute(operations.TimeoutQueries.SHOW_LOCK_TIMEOUT)
+            assert cursor.fetchone()[0] == "1s"
+
+    @pytest.mark.django_db(transaction=True)
+    def test_zero_timedelta_disables_the_lock_timeout(self):
+        project_state, new_state = self._states()
+        operation = self._add_index_operation()
+
+        with operations.index_lock_timeout(datetime.timedelta(0)):
+            with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+                operation.database_forwards(
+                    self.app_label, editor, from_state=project_state, to_state=new_state
+                )
+
+        assert editor.collected_sql == [
+            "SET lock_timeout = '0ms';",
+            'CREATE INDEX CONCURRENTLY IF NOT EXISTS "int_field_idx" ON "example_app_intmodel" ("int_field");',
+            "SET lock_timeout = '0';",
+        ]
+
+    # Disable the overall test transaction because a concurrent index cannot
+    # be triggered/tested inside of a transaction.
+    @pytest.mark.django_db(transaction=True, databases=["default", "secondary"])
+    @pytest.mark.parametrize(
+        "session_lock_timeout_in_ms,lock_timeout",
+        [
+            pytest.param(100, None, id="Keeping the session's lock_timeout."),
+            pytest.param(
+                0,
+                datetime.timedelta(milliseconds=100),
+                id="Setting a lock_timeout for index operations.",
+            ),
+        ],
+    )
+    def test_blocked_index_build_times_out(
+        self,
+        session_lock_timeout_in_ms: int,
+        lock_timeout: datetime.timedelta | None,
+    ) -> None:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SET SESSION lock_timeout = %s;", [session_lock_timeout_in_ms]
+            )
+
+        project_state, new_state = self._states()
+        operation = self._add_index_operation()
+
+        # "secondary" is a separate connection to the same database. It holds
+        # the lock CREATE INDEX CONCURRENTLY needs until the end of the block.
+        with transaction.atomic(using="secondary"):
+            with connections["secondary"].cursor() as cursor:
+                cursor.execute(_LOCK_INT_MODEL_TABLE)
+
+            with operations.index_lock_timeout(lock_timeout):
+                with pytest.raises(OperationalError, match="lock timeout"):
+                    with connection.schema_editor(atomic=False) as editor:
+                        operation.database_forwards(
+                            self.app_label,
+                            editor,
+                            from_state=project_state,
+                            to_state=new_state,
+                        )
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                _CHECK_INDEX_EXISTS_QUERY,
+                {"table_name": "example_app_intmodel", "index_name": "int_field_idx"},
+            )
+            assert not cursor.fetchone()
+
+    @pytest.mark.django_db(transaction=True)
+    def test_lock_timeout_is_disabled_again_after_the_context(self):
+        project_state, new_state = self._states()
+        operation = self._add_index_operation()
+
+        with pytest.raises(RuntimeError):
+            with operations.index_lock_timeout(None):
+                with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+                    operation.database_forwards(
+                        self.app_label,
+                        editor,
+                        from_state=project_state,
+                        to_state=new_state,
+                    )
+                inside_sql = list(editor.collected_sql)
+                raise RuntimeError("Bang!")
+
+        with connection.schema_editor(atomic=False, collect_sql=True) as editor:
+            operation.database_forwards(
+                self.app_label, editor, from_state=project_state, to_state=new_state
+            )
+
+        assert inside_sql == [
+            'CREATE INDEX CONCURRENTLY IF NOT EXISTS "int_field_idx" ON "example_app_intmodel" ("int_field");'
+        ]
+        assert editor.collected_sql == [
+            "SET lock_timeout = '0';",
+            'CREATE INDEX CONCURRENTLY IF NOT EXISTS "int_field_idx" ON "example_app_intmodel" ("int_field");',
+            "SET lock_timeout = '0';",
+        ]
+
+    def test_negative_lock_timeout_is_rejected(self):
+        with pytest.raises(operations.IndexLockTimeoutWasNegative):
+            with operations.index_lock_timeout(datetime.timedelta(seconds=-1)):
+                pass

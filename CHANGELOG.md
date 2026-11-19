@@ -8,7 +8,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 
 ## [Unreleased]
 
-_No notable unreleased changes_
+- Added the `operations.index_lock_timeout(lock_timeout)` context manager. It
+  chooses the `lock_timeout` that operations creating or dropping an index
+  concurrently use, instead of 0: `None` keeps the session's value and a
+  `timedelta` sets a specific one. A blocked index build can then fail with a
+  lock timeout instead of waiting indefinitely. The default is unchanged.
 
 ## [0.2.0] - 2026-11-06
 - Fixed a bug where a Foreign Key with `db_constraint=False` in `SaferAddFieldForeignKey`
