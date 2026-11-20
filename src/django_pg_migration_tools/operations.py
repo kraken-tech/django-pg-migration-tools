@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import contextlib
+import contextvars
+import datetime
 import hashlib
+from collections.abc import Iterator
 from textwrap import dedent
 from typing import Any, cast, overload
 
@@ -28,6 +32,55 @@ except ImportError:  # pragma: no cover
 class TimeoutQueries:
     SHOW_LOCK_TIMEOUT = "SHOW lock_timeout;"
     SET_LOCK_TIMEOUT = "SET lock_timeout = {lock_timeout};"
+
+
+class IndexLockTimeoutWasNegative(Exception):
+    pass
+
+
+# The lock_timeout index operations set while they run, as a value for
+# `SET lock_timeout`. None means they keep the session's lock_timeout.
+_INDEX_LOCK_TIMEOUT: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "django_pg_migration_tools_index_lock_timeout", default="0"
+)
+
+
+@contextlib.contextmanager
+def index_lock_timeout(lock_timeout: datetime.timedelta | None) -> Iterator[None]:
+    """
+    Choose the lock_timeout that index operations use inside this context.
+
+    By default, the operations that create or drop an index concurrently (for
+    example `SaferAddIndexConcurrently`, `SaferRemoveIndexConcurrently` and
+    `SaferAddUniqueConstraint`) set `lock_timeout` to 0 while they run, and
+    restore it afterwards. This lets a slow index build wait for older
+    transactions to finish instead of failing.
+
+    Inside this context they use `lock_timeout` instead:
+
+    - None: keep the session's lock_timeout and don't change it.
+    - A positive timedelta: set lock_timeout to it while they run, then
+      restore the session's value.
+    - A zero timedelta: disable the lock timeout, as they do by default.
+
+    An index build that waits for longer than its lock_timeout fails with a
+    lock timeout error, and the caller can retry it. If that happens after
+    the index's catalog entry has been created, an INVALID index is left
+    behind. The operation drops it before trying again.
+    """
+    value: str | None = None
+    if lock_timeout is not None:
+        if lock_timeout < datetime.timedelta(0):
+            raise IndexLockTimeoutWasNegative(
+                "`lock_timeout` must be zero or positive, or None."
+            )
+        value = f"{int(lock_timeout.total_seconds() * 1000)}ms"
+
+    token = _INDEX_LOCK_TIMEOUT.set(value)
+    try:
+        yield
+    finally:
+        _INDEX_LOCK_TIMEOUT.reset(token)
 
 
 class IndexQueries:
@@ -274,8 +327,7 @@ class SafeIndexOperationManager(
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        original_lock_timeout = self._show_lock_timeout(schema_editor)
-        self._set_lock_timeout(schema_editor, "0")
+        original_lock_timeout = self._apply_index_lock_timeout(schema_editor)
 
         self._ensure_not_an_invalid_index(schema_editor, index.name)
 
@@ -288,7 +340,7 @@ class SafeIndexOperationManager(
         )
         schema_editor.execute(index_sql)
 
-        self._set_lock_timeout(schema_editor, original_lock_timeout)
+        self._restore_lock_timeout(schema_editor, original_lock_timeout)
 
     def safer_drop_index(
         self,
@@ -304,8 +356,7 @@ class SafeIndexOperationManager(
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
 
-        original_lock_timeout = self._show_lock_timeout(schema_editor)
-        self._set_lock_timeout(schema_editor, "0")
+        original_lock_timeout = self._apply_index_lock_timeout(schema_editor)
 
         # Differently from the CREATE INDEX operation, Django already provides
         # us with IF EXISTS when dropping an index... We don't have to do that
@@ -313,6 +364,32 @@ class SafeIndexOperationManager(
         index_sql = str(index.remove_sql(model, schema_editor, concurrently=True))
         schema_editor.execute(index_sql)
 
+        self._restore_lock_timeout(schema_editor, original_lock_timeout)
+
+    def _apply_index_lock_timeout(
+        self, schema_editor: base_schema.BaseDatabaseSchemaEditor
+    ) -> str | None:
+        """
+        Set the lock_timeout for an index operation and return its previous value.
+
+        This is 0 unless `index_lock_timeout` chooses another value. Return
+        None, and leave lock_timeout alone, when it chooses to keep the
+        session's value.
+        """
+        lock_timeout = _INDEX_LOCK_TIMEOUT.get()
+        if lock_timeout is None:
+            return None
+        original_lock_timeout = self._show_lock_timeout(schema_editor)
+        self._set_lock_timeout(schema_editor, lock_timeout)
+        return original_lock_timeout
+
+    def _restore_lock_timeout(
+        self,
+        schema_editor: base_schema.BaseDatabaseSchemaEditor,
+        original_lock_timeout: str | None,
+    ) -> None:
+        if original_lock_timeout is None:
+            return
         self._set_lock_timeout(schema_editor, original_lock_timeout)
 
     def _set_lock_timeout(

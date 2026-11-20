@@ -11,7 +11,9 @@ Class Definitions
 
     Performs a ``CREATE INDEX CONCURRENTLY IF NOT EXISTS`` without a
     ``lock_timeout`` value to guarantee the index creation won't be affected by
-    any pre-set value of ``lock_timeout``.
+    any pre-set value of ``lock_timeout``. Use
+    :ref:`index_lock_timeout <index_lock_timeout>` to choose a different
+    ``lock_timeout``.
 
     :param model_name: Model name in lowercase without underscores.
     :type model_name: str
@@ -36,7 +38,9 @@ Class Definitions
 
     Performs DROP INDEX CONCURRENTLY IF EXISTS without a lock_timeout
     value to guarantee the index removal won't be affected by any pre-set
-    value of lock_timeout.
+    value of lock_timeout. Use
+    :ref:`index_lock_timeout <index_lock_timeout>` to choose a different
+    lock_timeout.
 
     :param model_name: Model name in lowercase without underscores.
     :type model_name: str
@@ -232,3 +236,66 @@ Class Definitions
 
     - :ref:`Instructions on how to use this class in a migration
       <guide_how_to_use_safer_add_field_one_to_one>`.
+
+Function Definitions
+--------------------
+
+.. _index_lock_timeout:
+
+.. py:function:: index_lock_timeout(lock_timeout: datetime.timedelta | None) -> Iterator[None]:
+
+    A context manager that chooses the ``lock_timeout`` index operations use.
+
+    By default, the operations that create or drop an index concurrently set
+    ``lock_timeout`` to 0 while they run and restore it afterwards. This lets a
+    slow index build wait for older transactions to finish instead of failing.
+    These include ``SaferAddIndexConcurrently``,
+    ``SaferRemoveIndexConcurrently``, ``SaferAddUniqueConstraint`` and
+    ``SaferAddFieldForeignKey``.
+
+    Inside this context they use ``lock_timeout`` instead:
+
+    - ``None``: keep the session's ``lock_timeout`` and don't change it.
+    - A positive ``timedelta``: set ``lock_timeout`` to it while they run, then
+      restore the session's value.
+    - ``timedelta(0)``: disable the lock timeout, as they do by default.
+
+    An index build that waits for longer than its ``lock_timeout`` fails with
+    a lock timeout error, and the caller can retry it. If the build fails
+    after the index's catalog entry has been created, an INVALID index is left
+    behind. The operation drops it before trying again.
+
+    Use this when a migration runner prefers to retry a blocked index build
+    rather than wait behind long-running transactions, for example during a
+    deploy. Code outside the context keeps the default behaviour.
+
+    The value is stored in a context variable, so it only applies to code
+    running in the current thread or task.
+
+    :param lock_timeout: The ``lock_timeout`` for index operations, or
+        ``None`` to keep the session's value.
+    :type lock_timeout: datetime.timedelta | None
+    :raise operations.IndexLockTimeoutWasNegative: When ``lock_timeout`` is
+        negative.
+
+    Example:
+
+    .. code-block:: python
+
+        import datetime
+
+        from django.core.management import call_command
+
+        from django_pg_migration_tools import operations, timeouts
+
+        # Keep the 10s lock_timeout set below for index operations too.
+        with operations.index_lock_timeout(None):
+            with timeouts.apply_timeouts(
+                using="default",
+                lock_timeout=datetime.timedelta(seconds=10),
+            ):
+                call_command("migrate")
+
+        # Give index operations their own 30s lock_timeout.
+        with operations.index_lock_timeout(datetime.timedelta(seconds=30)):
+            call_command("migrate")
